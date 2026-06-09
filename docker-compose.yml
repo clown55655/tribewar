@@ -1,0 +1,405 @@
+version: '3.8'
+
+networks:
+  tribeway-network:
+    driver: bridge
+
+volumes:
+  redis-data:
+  mongodb-data:
+  etcd-data:
+
+services:
+  # 基础设施服务
+  redis:
+    image: redis:7-alpine
+    container_name: tribeway-redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis-data:/data
+    networks:
+      - tribeway-network
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 3
+
+  mongodb:
+    image: mongo:6.0
+    container_name: tribeway-mongodb
+    ports:
+      - "27017:27017"
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: admin
+      MONGO_INITDB_ROOT_PASSWORD: ${TRIBEWAY_MONGODB_PASSWORD:?TRIBEWAY_MONGODB_PASSWORD is required}
+      MONGO_INITDB_DATABASE: tribeway_game
+    volumes:
+      - mongodb-data:/data/db
+      - ./scripts/init-mongo.js:/docker-entrypoint-initdb.d/init-mongo.js:ro
+    networks:
+      - tribeway-network
+    healthcheck:
+      test: echo 'db.runCommand("ping").ok' | mongosh localhost:27017/test --quiet
+      interval: 10s
+      timeout: 3s
+      retries: 3
+
+  etcd:
+    image: quay.io/coreos/etcd:v3.5.9
+    container_name: tribeway-etcd
+    ports:
+      - "2379:2379"
+      - "2380:2380"
+    environment:
+      ETCD_NAME: etcd0
+      ETCD_DATA_DIR: /etcd-data
+      ETCD_LISTEN_CLIENT_URLS: http://0.0.0.0:2379
+      ETCD_ADVERTISE_CLIENT_URLS: http://0.0.0.0:2379
+      ETCD_LISTEN_PEER_URLS: http://0.0.0.0:2380
+      ETCD_INITIAL_ADVERTISE_PEER_URLS: http://0.0.0.0:2380
+      ETCD_INITIAL_CLUSTER: etcd0=http://0.0.0.0:2380
+      ETCD_INITIAL_CLUSTER_TOKEN: etcd-cluster-1
+      ETCD_INITIAL_CLUSTER_STATE: new
+    volumes:
+      - etcd-data:/etcd-data
+    networks:
+      - tribeway-network
+    healthcheck:
+      test: ["CMD", "etcdctl", "endpoint", "health"]
+      interval: 10s
+      timeout: 3s
+      retries: 3
+
+  nsqlookupd:
+    image: nsqio/nsq:v1.2.1
+    container_name: tribeway-nsqlookupd
+    command: /nsqlookupd
+    ports:
+      - "4160:4160"
+      - "4161:4161"
+    networks:
+      - tribeway-network
+
+  nsqd:
+    image: nsqio/nsq:v1.2.1
+    container_name: tribeway-nsqd
+    command: /nsqd --lookupd-tcp-address=nsqlookupd:4160
+    ports:
+      - "4150:4150"
+      - "4151:4151"
+    depends_on:
+      - nsqlookupd
+    networks:
+      - tribeway-network
+
+  # Tribeway游戏服务器服务
+  tribeway-center:
+    build: .
+    container_name: tribeway-center
+    command: ["-config=config/config.yaml", "-node=center", "-id=center1"]
+    ports:
+      - "8010:8010"
+      - "9010:9010"
+    depends_on:
+      - redis
+      - mongodb
+      - etcd
+      - nsqlookupd
+      - nsqd
+    networks:
+      - tribeway-network
+    volumes:
+      - ./logs:/app/logs
+    environment:
+      - NODE_TYPE=center
+      - NODE_ID=center1
+      - TRIBEWAY_TOKEN_SECRET=${TRIBEWAY_TOKEN_SECRET:?TRIBEWAY_TOKEN_SECRET is required}
+      - TRIBEWAY_MONGODB_PASSWORD=${TRIBEWAY_MONGODB_PASSWORD:?TRIBEWAY_MONGODB_PASSWORD is required}
+      - TRIBEWAY_REDIS_PASSWORD=${TRIBEWAY_REDIS_PASSWORD:-}
+      - TRIBEWAY_ETCD_PASSWORD=${TRIBEWAY_ETCD_PASSWORD:-}
+    restart: unless-stopped
+
+  tribeway-login:
+    build: .
+    container_name: tribeway-login
+    command: ["-config=config/config.yaml", "-node=login", "-id=login1"]
+    ports:
+      - "8020:8020"
+      - "9020:9020"
+    depends_on:
+      - tribeway-center
+    networks:
+      - tribeway-network
+    volumes:
+      - ./logs:/app/logs
+    environment:
+      - NODE_TYPE=login
+      - NODE_ID=login1
+      - TRIBEWAY_TOKEN_SECRET=${TRIBEWAY_TOKEN_SECRET:?TRIBEWAY_TOKEN_SECRET is required}
+      - TRIBEWAY_MONGODB_PASSWORD=${TRIBEWAY_MONGODB_PASSWORD:?TRIBEWAY_MONGODB_PASSWORD is required}
+      - TRIBEWAY_REDIS_PASSWORD=${TRIBEWAY_REDIS_PASSWORD:-}
+      - TRIBEWAY_ETCD_PASSWORD=${TRIBEWAY_ETCD_PASSWORD:-}
+    restart: unless-stopped
+
+  tribeway-gateway1:
+    build: .
+    container_name: tribeway-gateway1
+    command: ["-config=config/config.yaml", "-node=gateway", "-id=gateway1"]
+    ports:
+      - "8001:8001"
+      - "9001:9001"
+      - "7001:7001"
+    depends_on:
+      - tribeway-login
+    networks:
+      - tribeway-network
+    volumes:
+      - ./logs:/app/logs
+    environment:
+      - NODE_TYPE=gateway
+      - NODE_ID=gateway1
+      - TRIBEWAY_TOKEN_SECRET=${TRIBEWAY_TOKEN_SECRET:?TRIBEWAY_TOKEN_SECRET is required}
+      - TRIBEWAY_MONGODB_PASSWORD=${TRIBEWAY_MONGODB_PASSWORD:?TRIBEWAY_MONGODB_PASSWORD is required}
+      - TRIBEWAY_REDIS_PASSWORD=${TRIBEWAY_REDIS_PASSWORD:-}
+      - TRIBEWAY_ETCD_PASSWORD=${TRIBEWAY_ETCD_PASSWORD:-}
+    restart: unless-stopped
+
+  tribeway-gateway2:
+    build: .
+    container_name: tribeway-gateway2
+    command: ["-config=config/config.yaml", "-node=gateway", "-id=gateway2"]
+    ports:
+      - "8002:8002"
+      - "9002:9002"
+      - "7002:7002"
+    depends_on:
+      - tribeway-login
+    networks:
+      - tribeway-network
+    volumes:
+      - ./logs:/app/logs
+    environment:
+      - NODE_TYPE=gateway
+      - NODE_ID=gateway2
+      - TRIBEWAY_TOKEN_SECRET=${TRIBEWAY_TOKEN_SECRET:?TRIBEWAY_TOKEN_SECRET is required}
+      - TRIBEWAY_MONGODB_PASSWORD=${TRIBEWAY_MONGODB_PASSWORD:?TRIBEWAY_MONGODB_PASSWORD is required}
+      - TRIBEWAY_REDIS_PASSWORD=${TRIBEWAY_REDIS_PASSWORD:-}
+      - TRIBEWAY_ETCD_PASSWORD=${TRIBEWAY_ETCD_PASSWORD:-}
+    restart: unless-stopped
+
+  tribeway-lobby:
+    build: .
+    container_name: tribeway-lobby
+    command: ["-config=config/config.yaml", "-node=lobby", "-id=lobby1"]
+    ports:
+      - "8030:8030"
+      - "9030:9030"
+    depends_on:
+      - tribeway-gateway1
+    networks:
+      - tribeway-network
+    volumes:
+      - ./logs:/app/logs
+    environment:
+      - NODE_TYPE=lobby
+      - NODE_ID=lobby1
+      - TRIBEWAY_TOKEN_SECRET=${TRIBEWAY_TOKEN_SECRET:?TRIBEWAY_TOKEN_SECRET is required}
+      - TRIBEWAY_MONGODB_PASSWORD=${TRIBEWAY_MONGODB_PASSWORD:?TRIBEWAY_MONGODB_PASSWORD is required}
+      - TRIBEWAY_REDIS_PASSWORD=${TRIBEWAY_REDIS_PASSWORD:-}
+      - TRIBEWAY_ETCD_PASSWORD=${TRIBEWAY_ETCD_PASSWORD:-}
+    restart: unless-stopped
+
+  tribeway-friend:
+    build: .
+    container_name: tribeway-friend
+    command: ["-config=config/config.yaml", "-node=friend", "-id=friend1"]
+    ports:
+      - "8040:8040"
+      - "9040:9040"
+    depends_on:
+      - tribeway-gateway1
+    networks:
+      - tribeway-network
+    volumes:
+      - ./logs:/app/logs
+    environment:
+      - NODE_TYPE=friend
+      - NODE_ID=friend1
+      - TRIBEWAY_TOKEN_SECRET=${TRIBEWAY_TOKEN_SECRET:?TRIBEWAY_TOKEN_SECRET is required}
+      - TRIBEWAY_MONGODB_PASSWORD=${TRIBEWAY_MONGODB_PASSWORD:?TRIBEWAY_MONGODB_PASSWORD is required}
+      - TRIBEWAY_REDIS_PASSWORD=${TRIBEWAY_REDIS_PASSWORD:-}
+      - TRIBEWAY_ETCD_PASSWORD=${TRIBEWAY_ETCD_PASSWORD:-}
+    restart: unless-stopped
+
+  tribeway-chat:
+    build: .
+    container_name: tribeway-chat
+    command: ["-config=config/config.yaml", "-node=chat", "-id=chat1"]
+    ports:
+      - "8050:8050"
+      - "9050:9050"
+    depends_on:
+      - tribeway-gateway1
+    networks:
+      - tribeway-network
+    volumes:
+      - ./logs:/app/logs
+    environment:
+      - NODE_TYPE=chat
+      - NODE_ID=chat1
+      - TRIBEWAY_TOKEN_SECRET=${TRIBEWAY_TOKEN_SECRET:?TRIBEWAY_TOKEN_SECRET is required}
+      - TRIBEWAY_MONGODB_PASSWORD=${TRIBEWAY_MONGODB_PASSWORD:?TRIBEWAY_MONGODB_PASSWORD is required}
+      - TRIBEWAY_REDIS_PASSWORD=${TRIBEWAY_REDIS_PASSWORD:-}
+      - TRIBEWAY_ETCD_PASSWORD=${TRIBEWAY_ETCD_PASSWORD:-}
+    restart: unless-stopped
+
+  tribeway-mail:
+    build: .
+    container_name: tribeway-mail
+    command: ["-config=config/config.yaml", "-node=mail", "-id=mail1"]
+    ports:
+      - "8060:8060"
+      - "9060:9060"
+    depends_on:
+      - tribeway-gateway1
+    networks:
+      - tribeway-network
+    volumes:
+      - ./logs:/app/logs
+    environment:
+      - NODE_TYPE=mail
+      - NODE_ID=mail1
+      - TRIBEWAY_TOKEN_SECRET=${TRIBEWAY_TOKEN_SECRET:?TRIBEWAY_TOKEN_SECRET is required}
+      - TRIBEWAY_MONGODB_PASSWORD=${TRIBEWAY_MONGODB_PASSWORD:?TRIBEWAY_MONGODB_PASSWORD is required}
+      - TRIBEWAY_REDIS_PASSWORD=${TRIBEWAY_REDIS_PASSWORD:-}
+      - TRIBEWAY_ETCD_PASSWORD=${TRIBEWAY_ETCD_PASSWORD:-}
+    restart: unless-stopped
+
+  tribeway-game1:
+    build: .
+    container_name: tribeway-game1
+    command: ["-config=config/config.yaml", "-node=game", "-id=game1"]
+    ports:
+      - "8100:8100"
+      - "9100:9100"
+    depends_on:
+      - tribeway-lobby
+    networks:
+      - tribeway-network
+    volumes:
+      - ./logs:/app/logs
+    environment:
+      - NODE_TYPE=game
+      - NODE_ID=game1
+      - TRIBEWAY_TOKEN_SECRET=${TRIBEWAY_TOKEN_SECRET:?TRIBEWAY_TOKEN_SECRET is required}
+      - TRIBEWAY_MONGODB_PASSWORD=${TRIBEWAY_MONGODB_PASSWORD:?TRIBEWAY_MONGODB_PASSWORD is required}
+      - TRIBEWAY_REDIS_PASSWORD=${TRIBEWAY_REDIS_PASSWORD:-}
+      - TRIBEWAY_ETCD_PASSWORD=${TRIBEWAY_ETCD_PASSWORD:-}
+    restart: unless-stopped
+
+  tribeway-game2:
+    build: .
+    container_name: tribeway-game2
+    command: ["-config=config/config.yaml", "-node=game", "-id=game2"]
+    ports:
+      - "8101:8101"
+      - "9101:9101"
+    depends_on:
+      - tribeway-lobby
+    networks:
+      - tribeway-network
+    volumes:
+      - ./logs:/app/logs
+    environment:
+      - NODE_TYPE=game
+      - NODE_ID=game2
+      - TRIBEWAY_TOKEN_SECRET=${TRIBEWAY_TOKEN_SECRET:?TRIBEWAY_TOKEN_SECRET is required}
+      - TRIBEWAY_MONGODB_PASSWORD=${TRIBEWAY_MONGODB_PASSWORD:?TRIBEWAY_MONGODB_PASSWORD is required}
+      - TRIBEWAY_REDIS_PASSWORD=${TRIBEWAY_REDIS_PASSWORD:-}
+      - TRIBEWAY_ETCD_PASSWORD=${TRIBEWAY_ETCD_PASSWORD:-}
+    restart: unless-stopped
+
+  tribeway-game3:
+    build: .
+    container_name: tribeway-game3
+    command: ["-config=config/config.yaml", "-node=game", "-id=game3"]
+    ports:
+      - "8102:8102"
+      - "9102:9102"
+    depends_on:
+      - tribeway-lobby
+    networks:
+      - tribeway-network
+    volumes:
+      - ./logs:/app/logs
+    environment:
+      - NODE_TYPE=game
+      - NODE_ID=game3
+      - TRIBEWAY_TOKEN_SECRET=${TRIBEWAY_TOKEN_SECRET:?TRIBEWAY_TOKEN_SECRET is required}
+      - TRIBEWAY_MONGODB_PASSWORD=${TRIBEWAY_MONGODB_PASSWORD:?TRIBEWAY_MONGODB_PASSWORD is required}
+      - TRIBEWAY_REDIS_PASSWORD=${TRIBEWAY_REDIS_PASSWORD:-}
+      - TRIBEWAY_ETCD_PASSWORD=${TRIBEWAY_ETCD_PASSWORD:-}
+    restart: unless-stopped
+
+  tribeway-gm:
+    build: .
+    container_name: tribeway-gm
+    command: ["-config=config/config.yaml", "-node=gm", "-id=gm1"]
+    ports:
+      - "8200:8200"
+      - "9200:9200"
+    depends_on:
+      - tribeway-center
+    networks:
+      - tribeway-network
+    volumes:
+      - ./logs:/app/logs
+    environment:
+      - NODE_TYPE=gm
+      - NODE_ID=gm1
+      - TRIBEWAY_TOKEN_SECRET=${TRIBEWAY_TOKEN_SECRET:?TRIBEWAY_TOKEN_SECRET is required}
+      - TRIBEWAY_MONGODB_PASSWORD=${TRIBEWAY_MONGODB_PASSWORD:?TRIBEWAY_MONGODB_PASSWORD is required}
+      - TRIBEWAY_REDIS_PASSWORD=${TRIBEWAY_REDIS_PASSWORD:-}
+      - TRIBEWAY_ETCD_PASSWORD=${TRIBEWAY_ETCD_PASSWORD:-}
+    restart: unless-stopped
+
+  # 监控和管理工具
+  nsqadmin:
+    image: nsqio/nsq:v1.2.1
+    container_name: tribeway-nsqadmin
+    command: /nsqadmin --lookupd-http-address=nsqlookupd:4161
+    ports:
+      - "4171:4171"
+    depends_on:
+      - nsqlookupd
+      - nsqd
+    networks:
+      - tribeway-network
+
+  redis-commander:
+    image: rediscommander/redis-commander:latest
+    container_name: tribeway-redis-commander
+    environment:
+      - REDIS_HOSTS=local:redis:6379
+    ports:
+      - "8081:8081"
+    depends_on:
+      - redis
+    networks:
+      - tribeway-network
+
+  mongo-express:
+    image: mongo-express
+    container_name: tribeway-mongo-express
+    ports:
+      - "8082:8081"
+    environment:
+      - ME_CONFIG_MONGODB_ADMINUSERNAME=admin
+      - ME_CONFIG_MONGODB_ADMINPASSWORD=${TRIBEWAY_MONGODB_PASSWORD:?TRIBEWAY_MONGODB_PASSWORD is required}
+      - ME_CONFIG_MONGODB_URL=mongodb://admin:${TRIBEWAY_MONGODB_PASSWORD:?TRIBEWAY_MONGODB_PASSWORD is required}@mongodb:27017/
+    depends_on:
+      - mongodb
+    networks:
+      - tribeway-network

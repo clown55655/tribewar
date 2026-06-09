@@ -1,0 +1,33 @@
+# Tribeway 集群初始化容器
+FROM alpine:latest
+
+# 安装必要工具
+RUN apk add --no-cache \
+    bash \
+    curl \
+    jq \
+    redis \
+    mongodb-tools \
+    ca-certificates
+
+# 设置工作目录
+WORKDIR /app
+
+# 复制脚本
+COPY scripts/init-cluster.sh /scripts/init-cluster.sh
+COPY scripts/init-replica-set.js /scripts/init-replica-set.js
+COPY config/ /config/
+
+# 设置权限
+RUN chmod +x /scripts/*.sh
+
+# 设置环境变量
+ENV CLUSTER_MODE=true
+ENV INIT_TIMEOUT=300
+
+# 健康检查
+HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \
+    CMD curl -f http://localhost:7001/health || exit 1
+
+# 启动命令
+ENTRYPOINT ["/scripts/init-cluster.sh"]

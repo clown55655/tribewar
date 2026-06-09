@@ -1,0 +1,484 @@
+version: '3.8'
+
+networks:
+  tribeway-cluster:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.20.0.0/16
+
+volumes:
+  redis-cluster-data:
+  mongodb-rs-data-1:
+  mongodb-rs-data-2:
+  mongodb-rs-data-3:
+  etcd-cluster-data-1:
+  etcd-cluster-data-2:
+  etcd-cluster-data-3:
+
+services:
+  # Redis 集群部署 (6节点：3主3从)
+  redis-cluster-1:
+    image: redis:7-alpine
+    container_name: tribeway-redis-cluster-1
+    ports:
+      - "7000:6379"
+    volumes:
+      - ./redis-cluster/redis.conf:/usr/local/etc/redis/redis.conf
+    command: redis-server /usr/local/etc/redis/redis.conf --port 6379 --cluster-enabled yes --cluster-config-file nodes.conf --cluster-node-timeout 5000 --appendonly yes
+    networks:
+      tribeway-cluster:
+        ipv4_address: 172.20.1.1
+
+  redis-cluster-2:
+    image: redis:7-alpine
+    container_name: tribeway-redis-cluster-2
+    ports:
+      - "7001:6379"
+    volumes:
+      - ./redis-cluster/redis.conf:/usr/local/etc/redis/redis.conf
+    command: redis-server /usr/local/etc/redis/redis.conf --port 6379 --cluster-enabled yes --cluster-config-file nodes.conf --cluster-node-timeout 5000 --appendonly yes
+    networks:
+      tribeway-cluster:
+        ipv4_address: 172.20.1.2
+
+  redis-cluster-3:
+    image: redis:7-alpine
+    container_name: tribeway-redis-cluster-3
+    ports:
+      - "7002:6379"
+    volumes:
+      - ./redis-cluster/redis.conf:/usr/local/etc/redis/redis.conf
+    command: redis-server /usr/local/etc/redis/redis.conf --port 6379 --cluster-enabled yes --cluster-config-file nodes.conf --cluster-node-timeout 5000 --appendonly yes
+    networks:
+      tribeway-cluster:
+        ipv4_address: 172.20.1.3
+
+  redis-cluster-4:
+    image: redis:7-alpine
+    container_name: tribeway-redis-cluster-4
+    ports:
+      - "7003:6379"
+    volumes:
+      - ./redis-cluster/redis.conf:/usr/local/etc/redis/redis.conf
+    command: redis-server /usr/local/etc/redis/redis.conf --port 6379 --cluster-enabled yes --cluster-config-file nodes.conf --cluster-node-timeout 5000 --appendonly yes
+    networks:
+      tribeway-cluster:
+        ipv4_address: 172.20.1.4
+
+  redis-cluster-5:
+    image: redis:7-alpine
+    container_name: tribeway-redis-cluster-5
+    ports:
+      - "7004:6379"
+    volumes:
+      - ./redis-cluster/redis.conf:/usr/local/etc/redis/redis.conf
+    command: redis-server /usr/local/etc/redis/redis.conf --port 6379 --cluster-enabled yes --cluster-config-file nodes.conf --cluster-node-timeout 5000 --appendonly yes
+    networks:
+      tribeway-cluster:
+        ipv4_address: 172.20.1.5
+
+  redis-cluster-6:
+    image: redis:7-alpine
+    container_name: tribeway-redis-cluster-6
+    ports:
+      - "7005:6379"
+    volumes:
+      - ./redis-cluster/redis.conf:/usr/local/etc/redis/redis.conf
+    command: redis-server /usr/local/etc/redis/redis.conf --port 6379 --cluster-enabled yes --cluster-config-file nodes.conf --cluster-node-timeout 5000 --appendonly yes
+    networks:
+      tribeway-cluster:
+        ipv4_address: 172.20.1.6
+
+  # Redis 集群初始化
+  redis-cluster-init:
+    image: redis:7-alpine
+    container_name: tribeway-redis-cluster-init
+    depends_on:
+      - redis-cluster-1
+      - redis-cluster-2
+      - redis-cluster-3
+      - redis-cluster-4
+      - redis-cluster-5
+      - redis-cluster-6
+    command: >
+      sh -c "
+        sleep 10 &&
+        redis-cli --cluster create 
+          172.20.1.1:6379 172.20.1.2:6379 172.20.1.3:6379
+          172.20.1.4:6379 172.20.1.5:6379 172.20.1.6:6379
+          --cluster-replicas 1 --cluster-yes
+      "
+    networks:
+      - tribeway-cluster
+
+  # MongoDB 副本集部署 (3节点)
+  mongodb-rs-1:
+    image: mongo:6.0
+    container_name: tribeway-mongodb-rs-1
+    ports:
+      - "27017:27017"
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: admin
+      MONGO_INITDB_ROOT_PASSWORD: ${TRIBEWAY_MONGODB_PASSWORD:?TRIBEWAY_MONGODB_PASSWORD is required}
+      TRIBEWAY_MONGODB_PASSWORD: ${TRIBEWAY_MONGODB_PASSWORD:?TRIBEWAY_MONGODB_PASSWORD is required}
+      TRIBEWAY_MONGODB_APP_PASSWORD: ${TRIBEWAY_MONGODB_APP_PASSWORD:?TRIBEWAY_MONGODB_APP_PASSWORD is required}
+    volumes:
+      - mongodb-rs-data-1:/data/db
+      - ./mongodb-cluster/mongod.conf:/etc/mongod.conf
+      - ./scripts/init-replica-set.js:/docker-entrypoint-initdb.d/init-replica-set.js
+    command: mongod --config /etc/mongod.conf --replSet rs0
+    networks:
+      tribeway-cluster:
+        ipv4_address: 172.20.2.1
+
+  mongodb-rs-2:
+    image: mongo:6.0
+    container_name: tribeway-mongodb-rs-2
+    ports:
+      - "27018:27017"
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: admin
+      MONGO_INITDB_ROOT_PASSWORD: ${TRIBEWAY_MONGODB_PASSWORD:?TRIBEWAY_MONGODB_PASSWORD is required}
+      TRIBEWAY_MONGODB_PASSWORD: ${TRIBEWAY_MONGODB_PASSWORD:?TRIBEWAY_MONGODB_PASSWORD is required}
+      TRIBEWAY_MONGODB_APP_PASSWORD: ${TRIBEWAY_MONGODB_APP_PASSWORD:?TRIBEWAY_MONGODB_APP_PASSWORD is required}
+    volumes:
+      - mongodb-rs-data-2:/data/db
+      - ./mongodb-cluster/mongod.conf:/etc/mongod.conf
+    command: mongod --config /etc/mongod.conf --replSet rs0
+    networks:
+      tribeway-cluster:
+        ipv4_address: 172.20.2.2
+
+  mongodb-rs-3:
+    image: mongo:6.0
+    container_name: tribeway-mongodb-rs-3
+    ports:
+      - "27019:27017"
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: admin
+      MONGO_INITDB_ROOT_PASSWORD: ${TRIBEWAY_MONGODB_PASSWORD:?TRIBEWAY_MONGODB_PASSWORD is required}
+      TRIBEWAY_MONGODB_PASSWORD: ${TRIBEWAY_MONGODB_PASSWORD:?TRIBEWAY_MONGODB_PASSWORD is required}
+      TRIBEWAY_MONGODB_APP_PASSWORD: ${TRIBEWAY_MONGODB_APP_PASSWORD:?TRIBEWAY_MONGODB_APP_PASSWORD is required}
+    volumes:
+      - mongodb-rs-data-3:/data/db
+      - ./mongodb-cluster/mongod.conf:/etc/mongod.conf
+    command: mongod --config /etc/mongod.conf --replSet rs0
+    networks:
+      tribeway-cluster:
+        ipv4_address: 172.20.2.3
+
+  # MongoDB 副本集初始化
+  mongodb-rs-init:
+    image: mongo:6.0
+    container_name: tribeway-mongodb-rs-init
+    depends_on:
+      - mongodb-rs-1
+      - mongodb-rs-2
+      - mongodb-rs-3
+    command: >
+      sh -c "
+        sleep 15 &&
+        mongosh --host 172.20.2.1:27017 --eval '
+          rs.initiate({
+            _id: \"rs0\",
+            members: [
+              {_id: 0, host: \"172.20.2.1:27017\", priority: 3},
+              {_id: 1, host: \"172.20.2.2:27017\", priority: 2},
+              {_id: 2, host: \"172.20.2.3:27017\", priority: 1}
+            ]
+          })
+        '
+      "
+    networks:
+      - tribeway-cluster
+
+  # ETCD 集群部署 (3节点)
+  etcd-1:
+    image: quay.io/coreos/etcd:v3.5.9
+    container_name: tribeway-etcd-1
+    ports:
+      - "2379:2379"
+      - "2380:2380"
+    environment:
+      ETCD_NAME: etcd-1
+      ETCD_INITIAL_ADVERTISE_PEER_URLS: http://172.20.3.1:2380
+      ETCD_LISTEN_PEER_URLS: http://0.0.0.0:2380
+      ETCD_ADVERTISE_CLIENT_URLS: http://172.20.3.1:2379
+      ETCD_LISTEN_CLIENT_URLS: http://0.0.0.0:2379
+      ETCD_INITIAL_CLUSTER: etcd-1=http://172.20.3.1:2380,etcd-2=http://172.20.3.2:2380,etcd-3=http://172.20.3.3:2380
+      ETCD_INITIAL_CLUSTER_STATE: new
+      ETCD_INITIAL_CLUSTER_TOKEN: tribeway-etcd-cluster
+    volumes:
+      - etcd-cluster-data-1:/etcd-data
+    networks:
+      tribeway-cluster:
+        ipv4_address: 172.20.3.1
+
+  etcd-2:
+    image: quay.io/coreos/etcd:v3.5.9
+    container_name: tribeway-etcd-2
+    ports:
+      - "2381:2379"
+      - "2382:2380"
+    environment:
+      ETCD_NAME: etcd-2
+      ETCD_INITIAL_ADVERTISE_PEER_URLS: http://172.20.3.2:2380
+      ETCD_LISTEN_PEER_URLS: http://0.0.0.0:2380
+      ETCD_ADVERTISE_CLIENT_URLS: http://172.20.3.2:2379
+      ETCD_LISTEN_CLIENT_URLS: http://0.0.0.0:2379
+      ETCD_INITIAL_CLUSTER: etcd-1=http://172.20.3.1:2380,etcd-2=http://172.20.3.2:2380,etcd-3=http://172.20.3.3:2380
+      ETCD_INITIAL_CLUSTER_STATE: new
+      ETCD_INITIAL_CLUSTER_TOKEN: tribeway-etcd-cluster
+    volumes:
+      - etcd-cluster-data-2:/etcd-data
+    networks:
+      tribeway-cluster:
+        ipv4_address: 172.20.3.2
+
+  etcd-3:
+    image: quay.io/coreos/etcd:v3.5.9
+    container_name: tribeway-etcd-3
+    ports:
+      - "2383:2379"
+      - "2384:2380"
+    environment:
+      ETCD_NAME: etcd-3
+      ETCD_INITIAL_ADVERTISE_PEER_URLS: http://172.20.3.3:2380
+      ETCD_LISTEN_PEER_URLS: http://0.0.0.0:2380
+      ETCD_ADVERTISE_CLIENT_URLS: http://172.20.3.3:2379
+      ETCD_LISTEN_CLIENT_URLS: http://0.0.0.0:2379
+      ETCD_INITIAL_CLUSTER: etcd-1=http://172.20.3.1:2380,etcd-2=http://172.20.3.2:2380,etcd-3=http://172.20.3.3:2380
+      ETCD_INITIAL_CLUSTER_STATE: new
+      ETCD_INITIAL_CLUSTER_TOKEN: tribeway-etcd-cluster
+    volumes:
+      - etcd-cluster-data-3:/etcd-data
+    networks:
+      tribeway-cluster:
+        ipv4_address: 172.20.3.3
+
+  # NSQ 集群部署
+  nsqlookupd-1:
+    image: nsqio/nsq:v1.2.1
+    container_name: tribeway-nsqlookupd-1
+    command: /nsqlookupd
+    ports:
+      - "4161:4161"
+      - "4160:4160"
+    networks:
+      tribeway-cluster:
+        ipv4_address: 172.20.4.1
+
+  nsqlookupd-2:
+    image: nsqio/nsq:v1.2.1
+    container_name: tribeway-nsqlookupd-2
+    command: /nsqlookupd
+    ports:
+      - "4163:4161"
+      - "4162:4160"
+    networks:
+      tribeway-cluster:
+        ipv4_address: 172.20.4.2
+
+  nsqd-1:
+    image: nsqio/nsq:v1.2.1
+    container_name: tribeway-nsqd-1
+    command: /nsqd --lookupd-tcp-address=172.20.4.1:4160 --lookupd-tcp-address=172.20.4.2:4160 --broadcast-address=172.20.4.11
+    ports:
+      - "4150:4150"
+      - "4151:4151"
+    depends_on:
+      - nsqlookupd-1
+      - nsqlookupd-2
+    networks:
+      tribeway-cluster:
+        ipv4_address: 172.20.4.11
+
+  nsqd-2:
+    image: nsqio/nsq:v1.2.1
+    container_name: tribeway-nsqd-2
+    command: /nsqd --lookupd-tcp-address=172.20.4.1:4160 --lookupd-tcp-address=172.20.4.2:4160 --broadcast-address=172.20.4.12
+    ports:
+      - "4152:4150"
+      - "4153:4151"
+    depends_on:
+      - nsqlookupd-1
+      - nsqlookupd-2
+    networks:
+      tribeway-cluster:
+        ipv4_address: 172.20.4.12
+
+  nsqd-3:
+    image: nsqio/nsq:v1.2.1
+    container_name: tribeway-nsqd-3
+    command: /nsqd --lookupd-tcp-address=172.20.4.1:4160 --lookupd-tcp-address=172.20.4.2:4160 --broadcast-address=172.20.4.13
+    ports:
+      - "4154:4150"
+      - "4155:4151"
+    depends_on:
+      - nsqlookupd-1
+      - nsqlookupd-2
+    networks:
+      tribeway-cluster:
+        ipv4_address: 172.20.4.13
+
+  # Tribeway游戏服务器集群（使用集群配置）
+  tribeway-center-cluster:
+    build: .
+    container_name: tribeway-center-cluster
+    command: ["-config=config/cluster.yaml", "-node=center", "-id=center1"]
+    ports:
+      - "8010:8010"
+      - "9010:9010"
+      - "7010:7010"
+    depends_on:
+      - etcd-1
+      - etcd-2
+      - etcd-3
+      - mongodb-rs-init
+      - redis-cluster-init
+    networks:
+      tribeway-cluster:
+        ipv4_address: 172.20.5.1
+    volumes:
+      - ./logs:/app/logs
+      - ./config/cluster.yaml:/app/config/cluster.yaml:ro
+    environment:
+      - NODE_TYPE=center
+      - NODE_ID=center1
+      - CLUSTER_MODE=true
+      - TRIBEWAY_TOKEN_SECRET=${TRIBEWAY_TOKEN_SECRET:?TRIBEWAY_TOKEN_SECRET is required}
+      - TRIBEWAY_MONGODB_PASSWORD=${TRIBEWAY_MONGODB_PASSWORD:?TRIBEWAY_MONGODB_PASSWORD is required}
+      - TRIBEWAY_MONGODB_APP_PASSWORD=${TRIBEWAY_MONGODB_APP_PASSWORD:?TRIBEWAY_MONGODB_APP_PASSWORD is required}
+      - TRIBEWAY_REDIS_PASSWORD=${TRIBEWAY_REDIS_PASSWORD:-}
+      - TRIBEWAY_ETCD_PASSWORD=${TRIBEWAY_ETCD_PASSWORD:-}
+    restart: unless-stopped
+
+  tribeway-gateway-cluster-1:
+    build: .
+    container_name: tribeway-gateway-cluster-1
+    command: ["-config=config/cluster.yaml", "-node=gateway", "-id=gateway1"]
+    ports:
+      - "8001:8001"
+      - "9001:9001"
+      - "7001:7001"
+    depends_on:
+      - tribeway-center-cluster
+    networks:
+      tribeway-cluster:
+        ipv4_address: 172.20.5.11
+    volumes:
+      - ./logs:/app/logs
+      - ./config/cluster.yaml:/app/config/cluster.yaml:ro
+    environment:
+      - NODE_TYPE=gateway
+      - NODE_ID=gateway1
+      - CLUSTER_MODE=true
+      - TRIBEWAY_TOKEN_SECRET=${TRIBEWAY_TOKEN_SECRET:?TRIBEWAY_TOKEN_SECRET is required}
+      - TRIBEWAY_MONGODB_PASSWORD=${TRIBEWAY_MONGODB_PASSWORD:?TRIBEWAY_MONGODB_PASSWORD is required}
+      - TRIBEWAY_MONGODB_APP_PASSWORD=${TRIBEWAY_MONGODB_APP_PASSWORD:?TRIBEWAY_MONGODB_APP_PASSWORD is required}
+      - TRIBEWAY_REDIS_PASSWORD=${TRIBEWAY_REDIS_PASSWORD:-}
+      - TRIBEWAY_ETCD_PASSWORD=${TRIBEWAY_ETCD_PASSWORD:-}
+    restart: unless-stopped
+
+  tribeway-gateway-cluster-2:
+    build: .
+    container_name: tribeway-gateway-cluster-2
+    command: ["-config=config/cluster.yaml", "-node=gateway", "-id=gateway2"]
+    ports:
+      - "8002:8002"
+      - "9002:9002"
+      - "7002:7002"
+    depends_on:
+      - tribeway-center-cluster
+    networks:
+      tribeway-cluster:
+        ipv4_address: 172.20.5.12
+    volumes:
+      - ./logs:/app/logs
+      - ./config/cluster.yaml:/app/config/cluster.yaml:ro
+    environment:
+      - NODE_TYPE=gateway
+      - NODE_ID=gateway2
+      - CLUSTER_MODE=true
+      - TRIBEWAY_TOKEN_SECRET=${TRIBEWAY_TOKEN_SECRET:?TRIBEWAY_TOKEN_SECRET is required}
+      - TRIBEWAY_MONGODB_PASSWORD=${TRIBEWAY_MONGODB_PASSWORD:?TRIBEWAY_MONGODB_PASSWORD is required}
+      - TRIBEWAY_MONGODB_APP_PASSWORD=${TRIBEWAY_MONGODB_APP_PASSWORD:?TRIBEWAY_MONGODB_APP_PASSWORD is required}
+      - TRIBEWAY_REDIS_PASSWORD=${TRIBEWAY_REDIS_PASSWORD:-}
+      - TRIBEWAY_ETCD_PASSWORD=${TRIBEWAY_ETCD_PASSWORD:-}
+    restart: unless-stopped
+
+  # 负载均衡器
+  nginx-lb:
+    image: nginx:alpine
+    container_name: tribeway-nginx-lb
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./nginx/ssl:/etc/nginx/ssl:ro
+    depends_on:
+      - tribeway-gateway-cluster-1
+      - tribeway-gateway-cluster-2
+    networks:
+      tribeway-cluster:
+        ipv4_address: 172.20.6.1
+    restart: unless-stopped
+
+  # 集群监控
+  prometheus-cluster:
+    image: prom/prometheus:latest
+    container_name: tribeway-prometheus-cluster
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./monitoring/prometheus-cluster.yml:/etc/prometheus/prometheus.yml:ro
+      - ./monitoring/tribeway_rules.yml:/etc/prometheus/tribeway_rules.yml:ro
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+      - '--web.console.libraries=/etc/prometheus/console_libraries'
+      - '--web.console.templates=/etc/prometheus/consoles'
+      - '--web.enable-lifecycle'
+      - '--web.enable-admin-api'
+    networks:
+      - tribeway-cluster
+    restart: unless-stopped
+
+  grafana-cluster:
+    image: grafana/grafana:latest
+    container_name: tribeway-grafana-cluster
+    ports:
+      - "3000:3000"
+    environment:
+      - GF_SECURITY_ADMIN_PASSWORD=${TRIBEWAY_GRAFANA_ADMIN_PASSWORD:?TRIBEWAY_GRAFANA_ADMIN_PASSWORD is required}
+      - GF_USERS_ALLOW_SIGN_UP=false
+    volumes:
+      - ./grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./grafana/dashboards:/var/lib/grafana/dashboards:ro
+    depends_on:
+      - prometheus-cluster
+    networks:
+      - tribeway-cluster
+    restart: unless-stopped
+
+# 集群初始化工具
+  cluster-init:
+    build: 
+      context: .
+      dockerfile: Dockerfile.cluster-init
+    container_name: tribeway-cluster-init
+    depends_on:
+      - redis-cluster-init
+      - mongodb-rs-init
+      - etcd-1
+      - etcd-2
+      - etcd-3
+    volumes:
+      - ./scripts:/scripts:ro
+      - ./config:/config:ro
+    command: /scripts/init-cluster.sh
+    networks:
+      - tribeway-cluster
+    restart: "no"

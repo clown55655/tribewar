@@ -1,0 +1,328 @@
+# Tribeway 游戏服务器集群配置文件
+server:
+  name: "tribeway-game-server-cluster"
+  version: "1.0.0"
+  debug: false
+
+# 网络配置
+network:
+  tcp_port: 8001
+  rpc_port: 9001
+  http_port: 7001
+  advertise_address: ""
+  advertise_address_env: "TRIBEWAY_ADVERTISE_ADDRESS"
+  max_connections: 50000      # 集群模式增加连接数限制
+  read_timeout: 30
+  write_timeout: 30
+  max_packet_size: 1048576
+
+# 数据库集群配置
+database:
+  redis:
+    # 启用Redis集群模式
+    cluster_mode: true
+    cluster_addrs:
+      - "172.20.1.1:6379"
+      - "172.20.1.2:6379"
+      - "172.20.1.3:6379"
+      - "172.20.1.4:6379"
+      - "172.20.1.5:6379"
+      - "172.20.1.6:6379"
+    password: ""
+    password_env: "TRIBEWAY_REDIS_PASSWORD"
+    
+    # 通用配置
+    pool_size: 200              # 集群模式增加连接池
+    max_retries: 3
+    dial_timeout: 5s
+    read_timeout: 3s
+    write_timeout: 3s
+    idle_timeout: 300s
+    
+    # 集群特有配置
+    max_redirects: 8
+    read_only: false
+    route_by_latency: true
+    route_randomly: false
+    
+  mongodb:
+    # 启用MongoDB副本集模式
+    replica_set: true
+    replica_set_name: "rs0"
+    hosts:
+      - "172.20.2.1:27017"
+      - "172.20.2.2:27017"
+      - "172.20.2.3:27017"
+    database: "tribeway_game"
+    auth_source: "admin"
+    username: "tribeway_user"
+    password: ""
+    password_env: "TRIBEWAY_MONGODB_APP_PASSWORD"
+    
+    # 连接配置
+    connect_timeout: 10s
+    max_pool_size: 200          # 集群模式增加连接池
+    min_pool_size: 10
+    max_conn_idle_time: 300s
+    
+    # 读写配置（副本集优化）
+    read_preference: "secondaryPreferred"  # 读操作优先使用从节点
+    write_concern: "majority"              # 写操作需要大多数节点确认
+    read_concern: "majority"               # 读取已确认的数据
+
+# NSQ集群配置
+nsq:
+  # 启用NSQ集群模式
+  cluster_mode: true
+  nsqd_addresses:
+    - "172.20.4.11:4150"
+    - "172.20.4.12:4150"
+    - "172.20.4.13:4150"
+  nsqlookupd_addresses:
+    - "172.20.4.1:4161"
+    - "172.20.4.2:4161"
+  
+  # 连接配置
+  max_in_flight: 500            # 集群模式增加并发处理
+  dial_timeout: 1s
+  read_timeout: 60s
+  write_timeout: 1s
+  message_timeout: 60s
+  
+  # 集群配置
+  load_balancing: true          # 启用负载均衡
+  failover_enabled: true        # 启用故障转移
+  health_check_interval: 30s
+  producer_pool_size: 20        # 增加生产者池
+
+# ETCD集群配置
+etcd:
+  endpoints:
+    - "172.20.3.1:2379"
+    - "172.20.3.2:2379" 
+    - "172.20.3.3:2379"
+  dial_timeout: 5s
+  username: ""
+  password: ""
+  password_env: "TRIBEWAY_ETCD_PASSWORD"
+  
+  # TLS配置（生产环境建议启用）
+  tls_enabled: false
+  tls_cert_file: "/certs/etcd-client.crt"
+  tls_key_file: "/certs/etcd-client.key"
+  tls_ca_file: "/certs/etcd-ca.crt"
+  tls_insecure: false
+  
+  # 集群优化配置
+  auto_sync_interval: 60s       # 自动同步端点
+  dial_keep_alive_time: 30s
+  dial_keep_alive_timeout: 5s
+  max_call_send_msg_size: 2097152   # 2MB
+  max_call_recv_msg_size: 4194304   # 4MB
+
+# 高性能日志配置
+log:
+  level: "info"                 # 生产环境使用info级别
+  format: "json"                # JSON格式便于日志分析
+  output: "file"                # 输出到文件
+  file_path: "/app/logs/tribeway-cluster.log"
+  max_size: 100                 # 100MB轮转
+  max_backups: 30               # 保留30个备份
+  max_age: 7                    # 保留7天
+  compress: true                # 压缩历史日志
+  development: false            # 生产模式
+  disable_caller: false
+  disable_stacktrace: false
+  
+  # 高流量采样配置
+  sampling:
+    initial: 100                # 前100条全部记录
+    thereafter: 10              # 后续每10条记录1条
+
+# 集群节点配置
+nodes:
+  center:
+    count: 1
+    ports: [8010]
+    
+  gateway:
+    count: 3                    # 增加网关数量
+    ports: [8001, 8002, 8003]
+    
+  login:
+    count: 2                    # 登录服务高可用
+    ports: [8020, 8021]
+    
+  lobby:
+    count: 2                    # 大厅服务负载均衡
+    ports: [8030, 8031]
+    
+  friend:
+    count: 1
+    ports: [8040]
+    
+  chat:
+    count: 2                    # 聊天服务负载分担
+    ports: [8050, 8051]
+    
+  mail:
+    count: 1
+    ports: [8060]
+    
+  game:
+    count: 5                    # 增加游戏服务器数量
+    ports: [8100, 8101, 8102, 8103, 8104]
+    
+  gm:
+    count: 1
+    ports: [8200]
+
+# 高性能对象池配置
+object_pool:
+  message_pool_size: 50000      # 增加消息池大小
+  connection_pool_size: 10000   # 增加连接池大小
+  actor_pool_size: 20000        # 增加Actor池大小
+
+# 集群RPC配置
+rpc:
+  pool_size: 100               # 增加RPC连接池
+  max_idle: 20
+  idle_timeout: 300
+
+# 集群特有配置
+cluster:
+  # 负载均衡配置
+  load_balancer:
+    algorithm: "weighted_round_robin"  # 加权轮询
+    health_check_interval: 10s
+    max_fails: 3
+    fail_timeout: 30s
+  
+  # 故障转移配置
+  failover:
+    enabled: true
+    detection_interval: 5s
+    recovery_interval: 60s
+    max_retries: 3
+  
+  # 数据一致性配置
+  consistency:
+    read_level: "eventual"      # 最终一致性
+    write_level: "strong"       # 强一致性写入
+    sync_interval: 10s
+  
+  # 扩缩容配置
+  autoscaling:
+    enabled: true
+    min_replicas: 1
+    max_replicas: 10
+    target_cpu_percent: 70
+    target_memory_percent: 80
+    scale_up_cooldown: 300s
+    scale_down_cooldown: 600s
+
+# 安全配置（集群增强）
+security:
+  auth:
+    password_hash_algorithm: "bcrypt"
+    token_secret: ""
+    token_secret_env: "TRIBEWAY_TOKEN_SECRET"
+    token_expiry_hours: 2
+  secrets:
+    encryption_key_env: "TRIBEWAY_ENCRYPTION_KEY"
+    jwt_secret_env: "TRIBEWAY_JWT_SECRET"
+  monitoring:
+    bind_address: "127.0.0.1"
+    admin_token_env: "TRIBEWAY_MONITORING_ADMIN_TOKEN"
+    allowed_cidrs:
+      - "127.0.0.1/32"
+      - "::1/128"
+      - "172.20.0.0/16"
+      - "10.0.0.0/8"
+    protect_metrics_endpoint: true
+  gm:
+    admin_user_ids: []
+    admin_user_ids_env: "TRIBEWAY_GM_ADMIN_USER_IDS"
+
+  # TLS配置
+  tls:
+    enabled: false
+    cert_file: "/certs/server.crt"
+    key_file: "/certs/server.key"
+    ca_file: "/certs/ca.crt"
+  
+  # 集群内通信加密
+  cluster_encryption:
+    enabled: true
+    algorithm: "aes-256-gcm"
+    key_rotation_interval: 24h
+  
+  # 增强限流（集群模式）
+  rate_limiting:
+    global_limit: 100000        # 全局限流
+    per_node_limit: 20000       # 单节点限流
+    per_user_limit: 1000        # 单用户限流
+    per_ip_limit: 5000          # 单IP限流
+    burst_multiplier: 2
+  
+  # IP白名单（集群管理）
+  ip_whitelist:
+    enabled: true
+    admin_ips:
+      - "172.20.0.0/16"        # 内部网络
+      - "10.0.0.0/8"           # 管理网络
+
+# 监控配置（集群版）
+monitoring:
+  enabled: true
+  prometheus:
+    enabled: true
+    port: 9090
+    scrape_interval: 5s
+    retention: "30d"
+  
+  grafana:
+    enabled: true
+    port: 3000
+    admin_password: ""
+    admin_password_env: "TRIBEWAY_GRAFANA_ADMIN_PASSWORD"
+  
+  alerting:
+    enabled: true
+    webhook_url: "https://your-webhook-url.com/alerts"
+    slack_channel: "#tribeway-alerts"
+  
+  # 集群特有监控指标
+  cluster_metrics:
+    - "cluster_node_count"
+    - "cluster_health_score"
+    - "cluster_load_distribution"
+    - "cluster_failover_events"
+    - "cross_node_latency"
+
+# 业务配置（集群优化）
+business:
+  # 用户分片配置
+  user_sharding:
+    enabled: true
+    shard_count: 16
+    algorithm: "consistent_hash"
+  
+  # 游戏房间分布
+  room_distribution:
+    strategy: "least_connections"
+    rebalance_interval: 300s
+    max_rooms_per_node: 1000
+  
+  # 缓存策略（集群优化）
+  cache_strategy:
+    user_cache_ttl: 3600s
+    session_cache_ttl: 7200s
+    game_data_cache_ttl: 86400s
+    distributed_cache: true     # 启用分布式缓存
+  
+  # 消息路由（集群）
+  message_routing:
+    strategy: "user_affinity"   # 用户亲和性路由
+    sticky_sessions: true       # 会话粘性
+    cross_node_messaging: true  # 跨节点消息

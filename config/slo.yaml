@@ -1,0 +1,24 @@
+service_level_objectives:
+  availability:
+    target: 99.9
+    window: 30d
+  latency:
+    rpc_p95_ms: 200
+    gateway_p95_ms: 150
+  errors:
+    max_error_rate_percent: 1.0
+  gameplay:
+    login_success_rate_percent: 99.0
+    settlement_failure_rate_percent: 0.1
+    reward_delivery_failure_rate_percent: 0.1
+
+alerts:
+  - name: high_rpc_latency
+    severity: warning
+    condition: rpc_p95_ms > 200
+  - name: high_error_rate
+    severity: critical
+    condition: error_rate_percent > 1.0
+  - name: dependency_degraded
+    severity: critical
+    condition: dependency_status != ok

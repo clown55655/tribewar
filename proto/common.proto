@@ -1,0 +1,339 @@
+syntax = "proto3";
+
+package proto;
+
+option go_package = "tribeway/pkg/proto";
+
+// 基础消息头
+message MessageHeader {
+    uint32 msg_id = 1;
+    uint32 seq = 2;
+    uint64 user_id = 3;
+    uint32 timestamp = 4;
+    string session_id = 5;
+}
+
+// 基础请求消息
+message BaseRequest {
+    MessageHeader header = 1;
+    bytes data = 2;
+}
+
+// 基础响应消息
+message BaseResponse {
+    MessageHeader header = 1;
+    int32 code = 2;
+    string msg = 3;
+    bytes data = 4;
+}
+
+// 用户登录请求
+message LoginRequest {
+    string username = 1;
+    string password = 2;
+    string device_id = 3;
+    string platform = 4;
+    string version = 5;
+}
+
+// 用户登录响应
+message LoginResponse {
+    uint64 user_id = 1;
+    string token = 2;
+    string nickname = 3;
+    int32 level = 4;
+    int64 exp = 5;
+    int64 gold = 6;
+    int64 diamond = 7;
+}
+
+// 服务器节点信息
+message NodeInfo {
+    string node_id = 1;
+    string node_type = 2;
+    string address = 3;
+    int32 port = 4;
+    bool online = 5;
+    int32 load = 6;
+    uint32 update_time = 7;
+}
+
+// 好友请求消息
+message AddFriendRequest {
+    uint64 friend_id = 1;
+    string message = 2;
+}
+
+// 接受好友请求消息
+message AcceptFriendRequest {
+    uint64 friend_id = 1;
+}
+
+// 好友信息
+message FriendInfo {
+    uint64 user_id = 1;
+    string nickname = 2;
+    int32 level = 3;
+    string avatar = 4;
+    bool online = 5;
+    uint32 last_login_time = 6;
+}
+
+// 好友列表响应
+message FriendListResponse {
+    repeated FriendInfo friends = 1;
+}
+
+// 开始游戏请求
+message StartGameRequest {
+    uint64 room_id = 1;
+    int32 game_type = 2;
+}
+
+// 结束游戏请求
+message EndGameRequest {
+    uint64 game_id = 1;
+    uint64 winner = 2;
+}
+
+// 玩家操作请求
+message PlayerActionRequest {
+    uint64 game_id = 1;
+    int32 action_type = 2;
+    bytes action_data = 3;
+}
+
+// 游戏状态请求
+message GameStateRequest {
+    uint64 game_id = 1;
+}
+
+// 游戏状态响应
+message GameStateResponse {
+    uint64 game_id = 1;
+    int32 status = 2;
+    uint64 current_player = 3;
+    repeated GamePlayerInfo players = 4;
+    bytes game_data = 5;
+}
+
+// 游戏玩家信息
+message GamePlayerInfo {
+    uint64 user_id = 1;
+    string nickname = 2;
+    int32 level = 3;
+    int64 score = 4;
+    int32 status = 5;
+}
+
+// 创建房间请求
+message CreateRoomRequest {
+    string room_name = 1;
+    int32 game_type = 2;
+    int32 max_players = 3;
+    bool is_private = 4;
+    string password = 5;
+}
+
+// 加入房间请求
+message JoinRoomRequest {
+    uint64 room_id = 1;
+    string password = 2;
+}
+
+// 房间信息
+message RoomInfo {
+    uint64 room_id = 1;
+    string room_name = 2;
+    int32 game_type = 3;
+    int32 current_players = 4;
+    int32 max_players = 5;
+    int32 status = 6;
+    bool is_private = 7;
+    GamePlayerInfo owner = 8;
+    repeated GamePlayerInfo players = 9;
+    uint32 created_time = 10;
+}
+
+// 房间列表响应
+message RoomListResponse {
+    repeated RoomInfo rooms = 1;
+    int32 total = 2;
+}
+
+// 发送消息请求
+message SendMessageRequest {
+    uint64 to_user_id = 1;
+    int32 channel_type = 2;
+    uint64 channel_id = 3;
+    int32 message_type = 4;
+    string content = 5;
+}
+
+// 聊天历史请求
+message ChatHistoryRequest {
+    int32 channel_type = 1;
+    uint64 channel_id = 2;
+    int32 limit = 3;
+    int32 offset = 4;
+}
+
+// 聊天消息
+message ChatMessage {
+    uint64 message_id = 1;
+    uint64 from_user_id = 2;
+    string from_nickname = 3;
+    uint64 to_user_id = 4;
+    int32 channel_type = 5;
+    uint64 channel_id = 6;
+    int32 message_type = 7;
+    string content = 8;
+    uint32 send_time = 9;
+}
+
+// 聊天历史响应
+message ChatHistoryResponse {
+    repeated ChatMessage messages = 1;
+    int32 total = 2;
+}
+
+// 屏蔽用户请求
+message BlockUserRequest {
+    uint64 target_user_id = 1;
+}
+
+// 邮件列表请求
+message MailListRequest {
+    int32 limit = 1;
+    int32 offset = 2;
+    int32 mail_type = 3;
+}
+
+// 邮件信息
+message MailInfo {
+    uint64 mail_id = 1;
+    uint64 from_user_id = 2;
+    string from_nickname = 3;
+    uint64 to_user_id = 4;
+    int32 mail_type = 5;
+    string title = 6;
+    string content = 7;
+    repeated Reward rewards = 8;
+    bool is_read = 9;
+    bool is_claimed = 10;
+    uint32 send_time = 11;
+    uint32 expire_time = 12;
+}
+
+// 奖励信息
+message Reward {
+    uint32 item_id = 1;
+    int32 item_type = 2;
+    uint32 quantity = 3;
+}
+
+// 邮件列表响应
+message MailListResponse {
+    repeated MailInfo mails = 1;
+    int32 total = 2;
+}
+
+// 邮件操作请求
+message MailOperationRequest {
+    uint64 mail_id = 1;
+}
+
+// 发送邮件请求
+message SendMailRequest {
+    uint64 to_user_id = 1;
+    int32 mail_type = 2;
+    string title = 3;
+    string content = 4;
+    repeated Reward rewards = 5;
+    uint32 expire_time = 6;
+}
+
+// GM命令请求
+message GMCommandRequest {
+    string command = 1;
+    repeated string args = 2;
+}
+
+// 踢出用户请求
+message KickUserRequest {
+    uint64 target_user_id = 1;
+    string reason = 2;
+}
+
+// 封禁用户请求
+message BanUserRequest {
+    uint64 target_user_id = 1;
+    string reason = 2;
+    uint32 duration = 3;
+}
+
+// 解封用户请求
+message UnbanUserRequest {
+    uint64 target_user_id = 1;
+}
+
+// 发送公告请求
+message SendNoticeRequest {
+    string title = 1;
+    string content = 2;
+    int32 notice_type = 3;
+    repeated uint64 target_users = 4;
+}
+
+// 服务信息
+message ServiceInfo {
+    string service_id = 1;
+    string service_type = 2;
+    string address = 3;
+    int32 port = 4;
+    string status = 5;
+    uint32 last_heartbeat = 6;
+}
+
+// 服务列表响应
+message ServiceListResponse {
+    repeated ServiceInfo services = 1;
+    int32 total = 2;
+}
+
+// 集群状态响应
+message ClusterStatusResponse {
+    int32 total_services = 1;
+    int32 online_services = 2;
+    map<string, int32> service_stats = 3;
+    SystemInfo system_info = 4;
+}
+
+// 系统信息
+message SystemInfo {
+    float cpu_usage = 1;
+    float memory_usage = 2;
+    float disk_usage = 3;
+    uint32 uptime = 4;
+}
+
+// 广播消息请求
+message BroadcastMessageRequest {
+    string message_type = 1;
+    string content = 2;
+    repeated string target_services = 3;
+}
+
+// 服务操作请求
+message ServiceOperationRequest {
+    string service_id = 1;
+    string service_type = 2;
+    string operation = 3;
+}
+
+// 通用响应消息
+message CommonResponse {
+    int32 code = 1;
+    string message = 2;
+    bytes data = 3;
+}

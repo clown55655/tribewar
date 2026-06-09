@@ -1,0 +1,155 @@
+# Tribeway 游戏服务器框架 .gitignore
+
+# 二进制文件
+/bin/
+/build/
+/dist/
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+tribeway
+tribeway-*
+
+# Go 相关
+vendor/
+*.mod.sum
+*.work
+*.work.sum
+
+# 测试和覆盖率文件
+*.test
+*.out
+coverage.txt
+coverage.html
+*.prof
+
+# 日志文件
+logs/
+*.log
+*.log.*
+
+# 配置文件（敏感信息）
+.env
+.env.*
+!.env.example
+!.env.*.example
+.env.local
+.env.*.local
+config/local.yaml
+config/*-local.yaml
+config/*.secret.yaml
+
+# 数据库文件
+*.db
+*.sqlite
+*.sqlite3
+
+# 缓存目录
+cache/
+tmp/
+temp/
+.codex_tmp/
+
+# PID文件
+*.pid
+
+# 运行时文件
+runtime/
+data/runtime/
+
+# Docker 相关
+.dockerignore
+
+# 监控数据
+monitoring/data/
+prometheus/data/
+grafana/data/
+alertmanager/data/
+
+# 备份文件
+backup/
+*.backup
+*.bak
+*.old
+
+# 插件编译文件
+plugins/*.so
+plugins/*.dll
+
+# 性能分析文件
+*.pb.gz
+*.svg
+*.png
+pprof/
+
+# 热更新临时文件
+hotreload/temp/
+*.hot
+
+# IDE 文件
+.vscode/settings.json
+.idea/
+*.swp
+*.swo
+*~
+
+# 系统文件
+.DS_Store
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+
+# 依赖管理
+node_modules/
+yarn-error.log
+package-lock.json
+
+# 证书文件
+*.crt
+*.key
+*.pem
+certs/
+
+# 开发工具
+.air.toml
+air_tmp/
+
+# 报告文件
+reports/
+performance_*.json
+load_test_*.json
+
+# 本地开发配置
+docker-compose.override.yml
+kubernetes/local/
+
+# 压缩文件
+*.tar.gz
+*.tar.bz2
+*.zip
+*.7z
+
+# 编译器和工具生成文件
+*.orig
+.*.orig
+.merge_file_*
+
+# Go workspace 文件
+go.work
+go.work.sum
+
+# protobuf 生成的文件可以提交，但如果你倾向于重新生成
+# pkg/proto/*.pb.go
+
+# 如果使用 air 热重载工具
+.air.toml
+
+# 如果使用 delve 调试器
+debug
+debug.test
+__debug_bin
+
+# 测试文件
+testdata/output/

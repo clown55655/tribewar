@@ -1,0 +1,142 @@
+[
+  {
+    "id": "error.invalid_username",
+    "one": "用户名无效"
+  },
+  {
+    "id": "error.invalid_password",
+    "one": "密码无效"
+  },
+  {
+    "id": "error.user_not_found",
+    "one": "用户不存在"
+  },
+  {
+    "id": "error.user_already_exists",
+    "one": "用户已存在"
+  },
+  {
+    "id": "error.login_failed",
+    "one": "登录失败"
+  },
+  {
+    "id": "error.permission_denied",
+    "one": "权限不足"
+  },
+  {
+    "id": "error.server_error",
+    "one": "服务器错误"
+  },
+  {
+    "id": "error.rate_limit_exceeded",
+    "one": "请求过于频繁，请稍后再试"
+  },
+  {
+    "id": "error.missing_token",
+    "one": "缺少认证令牌"
+  },
+  {
+    "id": "error.invalid_token",
+    "one": "认证令牌无效"
+  },
+  {
+    "id": "success.login",
+    "one": "登录成功"
+  },
+  {
+    "id": "success.logout",
+    "one": "退出成功"
+  },
+  {
+    "id": "success.register",
+    "one": "注册成功"
+  },
+  {
+    "id": "success.room_created",
+    "one": "房间创建成功"
+  },
+  {
+    "id": "success.room_joined",
+    "one": "成功加入房间"
+  },
+  {
+    "id": "success.room_left",
+    "one": "成功离开房间"
+  },
+  {
+    "id": "success.game_started",
+    "one": "游戏开始"
+  },
+  {
+    "id": "success.friend_added",
+    "one": "好友添加成功"
+  },
+  {
+    "id": "success.action_processed",
+    "one": "操作处理成功"
+  },
+  {
+    "id": "success.hot_reload",
+    "one": "热更新完成"
+  },
+  {
+    "id": "success.token_valid",
+    "one": "令牌有效"
+  },
+  {
+    "id": "game.waiting_for_players",
+    "one": "等待玩家加入"
+  },
+  {
+    "id": "game.game_started",
+    "one": "游戏已开始"
+  },
+  {
+    "id": "game.game_ended",
+    "one": "游戏已结束"
+  },
+  {
+    "id": "game.your_turn",
+    "one": "轮到你了"
+  },
+  {
+    "id": "game.waiting_for_opponent",
+    "one": "等待对手行动"
+  },
+  {
+    "id": "chat.message_sent",
+    "one": "消息已发送"
+  },
+  {
+    "id": "chat.user_blocked",
+    "one": "用户已被屏蔽"
+  },
+  {
+    "id": "chat.message_too_long",
+    "one": "消息过长"
+  },
+  {
+    "id": "friend.request_sent",
+    "one": "好友请求已发送"
+  },
+  {
+    "id": "friend.request_accepted",
+    "one": "好友请求已接受"
+  },
+  {
+    "id": "friend.already_friends",
+    "one": "已经是好友关系"
+  },
+  {
+    "id": "mail.new_mail",
+    "one": "收到新邮件"
+  },
+  {
+    "id": "mail.rewards_claimed",
+    "one": "奖励已领取"
+  },
+  {
+    "id": "mail.mail_deleted",
+    "one": "邮件已删除"
+  }
+]

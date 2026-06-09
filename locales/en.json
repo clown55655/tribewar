@@ -1,0 +1,142 @@
+[
+  {
+    "id": "error.invalid_username",
+    "one": "Invalid username"
+  },
+  {
+    "id": "error.invalid_password",
+    "one": "Invalid password"
+  },
+  {
+    "id": "error.user_not_found",
+    "one": "User not found"
+  },
+  {
+    "id": "error.user_already_exists",
+    "one": "User already exists"
+  },
+  {
+    "id": "error.login_failed",
+    "one": "Login failed"
+  },
+  {
+    "id": "error.permission_denied",
+    "one": "Permission denied"
+  },
+  {
+    "id": "error.server_error",
+    "one": "Server error"
+  },
+  {
+    "id": "error.rate_limit_exceeded",
+    "one": "Rate limit exceeded"
+  },
+  {
+    "id": "error.missing_token",
+    "one": "Missing authentication token"
+  },
+  {
+    "id": "error.invalid_token",
+    "one": "Invalid authentication token"
+  },
+  {
+    "id": "success.login",
+    "one": "Login successful"
+  },
+  {
+    "id": "success.logout",
+    "one": "Logout successful"
+  },
+  {
+    "id": "success.register",
+    "one": "Registration successful"
+  },
+  {
+    "id": "success.room_created",
+    "one": "Room created successfully"
+  },
+  {
+    "id": "success.room_joined",
+    "one": "Joined room successfully"
+  },
+  {
+    "id": "success.room_left",
+    "one": "Left room successfully"
+  },
+  {
+    "id": "success.game_started",
+    "one": "Game started"
+  },
+  {
+    "id": "success.friend_added",
+    "one": "Friend added successfully"
+  },
+  {
+    "id": "success.action_processed",
+    "one": "Action processed successfully"
+  },
+  {
+    "id": "success.hot_reload",
+    "one": "Hot reload completed"
+  },
+  {
+    "id": "success.token_valid",
+    "one": "Token is valid"
+  },
+  {
+    "id": "game.waiting_for_players",
+    "one": "Waiting for players to join"
+  },
+  {
+    "id": "game.game_started",
+    "one": "Game has started"
+  },
+  {
+    "id": "game.game_ended",
+    "one": "Game has ended"
+  },
+  {
+    "id": "game.your_turn",
+    "one": "It's your turn"
+  },
+  {
+    "id": "game.waiting_for_opponent",
+    "one": "Waiting for opponent's move"
+  },
+  {
+    "id": "chat.message_sent",
+    "one": "Message sent"
+  },
+  {
+    "id": "chat.user_blocked",
+    "one": "User has been blocked"
+  },
+  {
+    "id": "chat.message_too_long",
+    "one": "Message is too long"
+  },
+  {
+    "id": "friend.request_sent",
+    "one": "Friend request sent"
+  },
+  {
+    "id": "friend.request_accepted",
+    "one": "Friend request accepted"
+  },
+  {
+    "id": "friend.already_friends",
+    "one": "You are already friends"
+  },
+  {
+    "id": "mail.new_mail",
+    "one": "New mail received"
+  },
+  {
+    "id": "mail.rewards_claimed",
+    "one": "Rewards have been claimed"
+  },
+  {
+    "id": "mail.mail_deleted",
+    "one": "Mail has been deleted"
+  }
+]

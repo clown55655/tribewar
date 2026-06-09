@@ -1,0 +1,226 @@
+{
+  "version": "1.0.0",
+  "last_updated": "2024-01-01T00:00:00Z",
+  "cards": [
+    {
+      "id": 1,
+      "name": "Wisp",
+      "cost": 0,
+      "attack": 1,
+      "health": 1,
+      "card_type": "minion",
+      "rarity": "basic",
+      "description": "A simple 1/1 creature.",
+      "collectible": true
+    },
+    {
+      "id": 2,
+      "name": "Murloc Raider", 
+      "cost": 1,
+      "attack": 2,
+      "health": 1,
+      "card_type": "minion",
+      "race": "murloc",
+      "rarity": "basic",
+      "description": "A fierce murloc warrior.",
+      "collectible": true
+    },
+    {
+      "id": 3,
+      "name": "River Crocolisk",
+      "cost": 2,
+      "attack": 2,
+      "health": 3,
+      "card_type": "minion",
+      "race": "beast",
+      "rarity": "basic",
+      "description": "A sturdy beast from the river.",
+      "collectible": true
+    },
+    {
+      "id": 11,
+      "name": "Fireball",
+      "cost": 4,
+      "card_type": "spell",
+      "rarity": "basic",
+      "description": "Deal 6 damage.",
+      "effect": {
+        "type": "damage",
+        "amount": 6,
+        "target": "any"
+      },
+      "collectible": true
+    },
+    {
+      "id": 12,
+      "name": "Healing Potion",
+      "cost": 1,
+      "card_type": "spell",
+      "rarity": "common",
+      "description": "Restore 3 Health.",
+      "effect": {
+        "type": "heal",
+        "amount": 3,
+        "target": "friendly"
+      },
+      "collectible": true
+    }
+  ],
+  "game_modes": [
+    {
+      "id": "standard",
+      "name": "Standard",
+      "description": "Standard game mode",
+      "max_players": 2,
+      "turn_time_limit": 75,
+      "deck_size": 30,
+      "max_hand_size": 10,
+      "starting_health": 30,
+      "starting_mana": 1,
+      "max_mana": 10
+    },
+    {
+      "id": "arena",
+      "name": "Arena",
+      "description": "Draft format",
+      "max_players": 2,
+      "turn_time_limit": 90,
+      "deck_size": 30,
+      "max_hand_size": 10,
+      "starting_health": 30,
+      "starting_mana": 1,
+      "max_mana": 10,
+      "draft_mode": true
+    },
+    {
+      "id": "battlegrounds",
+      "name": "Battlegrounds",
+      "description": "Auto-battler mode",
+      "max_players": 8,
+      "turn_time_limit": 60,
+      "starting_health": 40,
+      "starting_gold": 3,
+      "max_board_size": 7
+    }
+  ],
+  "rewards": [
+    {
+      "id": 1,
+      "name": "Victory Gold",
+      "type": "gold",
+      "amount": 10,
+      "condition": "win_game"
+    },
+    {
+      "id": 2,
+      "name": "Daily Login",
+      "type": "gold", 
+      "amount": 50,
+      "condition": "daily_login"
+    },
+    {
+      "id": 3,
+      "name": "First Win Bonus",
+      "type": "gold",
+      "amount": 100,
+      "condition": "first_win_of_day"
+    }
+  ],
+  "achievements": [
+    {
+      "id": 1,
+      "name": "First Victory",
+      "description": "Win your first game",
+      "reward_type": "gold",
+      "reward_amount": 100,
+      "condition": {
+        "type": "win_games",
+        "count": 1
+      }
+    },
+    {
+      "id": 2,
+      "name": "Card Master",
+      "description": "Play 100 cards",
+      "reward_type": "diamond",
+      "reward_amount": 50,
+      "condition": {
+        "type": "play_cards",
+        "count": 100
+      }
+    },
+    {
+      "id": 3,
+      "name": "Social Butterfly",
+      "description": "Add 10 friends",
+      "reward_type": "gold",
+      "reward_amount": 500,
+      "condition": {
+        "type": "add_friends",
+        "count": 10
+      }
+    }
+  ],
+  "balance_config": {
+    "mana_per_turn": 1,
+    "max_mana": 10,
+    "starting_cards": 3,
+    "cards_per_turn": 1,
+    "max_hand_size": 10,
+    "max_board_size": 7,
+    "hero_health": 30,
+    "turn_time_limit": 75,
+    "fatigue_damage_start": 1,
+    "fatigue_damage_increment": 1
+  },
+  "constants": {
+    "exp_per_level": [
+      0, 100, 250, 450, 700, 1000, 1350, 1750, 2200, 2700, 3250
+    ],
+    "gold_per_win": 10,
+    "gold_per_loss": 5,
+    "daily_quest_slots": 3,
+    "max_deck_copies": 2,
+    "max_legendary_copies": 1
+  },
+  "seasons": [
+    {
+      "id": 1,
+      "name": "Season of the Phoenix",
+      "start_date": "2024-01-01T00:00:00Z",
+      "end_date": "2024-04-01T00:00:00Z",
+      "rewards": [
+        {
+          "rank": 25,
+          "reward_type": "card_back",
+          "reward_id": "phoenix_back"
+        },
+        {
+          "rank": 20,
+          "reward_type": "gold",
+          "reward_amount": 100
+        },
+        {
+          "rank": 15,
+          "reward_type": "card_pack",
+          "reward_amount": 1
+        },
+        {
+          "rank": 10,
+          "reward_type": "epic_card",
+          "reward_id": "random"
+        },
+        {
+          "rank": 5,
+          "reward_type": "legendary_card", 
+          "reward_id": "random"
+        },
+        {
+          "rank": 1,
+          "reward_type": "golden_legendary",
+          "reward_id": "random"
+        }
+      ]
+    }
+  ]
+}

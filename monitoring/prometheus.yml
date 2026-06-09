@@ -1,0 +1,112 @@
+# Prometheus 配置文件
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+
+rule_files:
+  - "tribeway_rules.yml"
+
+alerting:
+  alertmanagers:
+    - static_configs:
+        - targets:
+          - "localhost:9093"
+
+scrape_configs:
+  # Prometheus自身监控
+  - job_name: "prometheus"
+    static_configs:
+      - targets: ["localhost:9090"]
+
+  # Tribeway游戏服务器监控
+  - job_name: "tribeway-center"
+    static_configs:
+      - targets: ["localhost:7010"]
+    metrics_path: "/metrics"
+    scrape_interval: 10s
+
+  - job_name: "tribeway-gateway"
+    static_configs:
+      - targets: 
+          - "localhost:7001"
+          - "localhost:7002"
+    metrics_path: "/metrics"
+    scrape_interval: 5s
+
+  - job_name: "tribeway-login"
+    static_configs:
+      - targets: ["localhost:7020"]
+    metrics_path: "/metrics"
+    scrape_interval: 10s
+
+  - job_name: "tribeway-lobby"
+    static_configs:
+      - targets: ["localhost:7030"]
+    metrics_path: "/metrics"
+    scrape_interval: 10s
+
+  - job_name: "tribeway-game"
+    static_configs:
+      - targets: 
+          - "localhost:7100"
+          - "localhost:7101"
+          - "localhost:7102"
+    metrics_path: "/metrics"
+    scrape_interval: 5s
+
+  - job_name: "tribeway-friend"
+    static_configs:
+      - targets: ["localhost:7040"]
+    metrics_path: "/metrics"
+    scrape_interval: 10s
+
+  - job_name: "tribeway-chat"
+    static_configs:
+      - targets: ["localhost:7050"]
+    metrics_path: "/metrics"
+    scrape_interval: 10s
+
+  - job_name: "tribeway-mail"
+    static_configs:
+      - targets: ["localhost:7060"]
+    metrics_path: "/metrics"
+    scrape_interval: 15s
+
+  - job_name: "tribeway-gm"
+    static_configs:
+      - targets: ["localhost:7200"]
+    metrics_path: "/metrics"
+    scrape_interval: 30s
+
+  # 基础设施监控
+  - job_name: "redis"
+    static_configs:
+      - targets: ["localhost:6379"]
+    metrics_path: "/metrics"
+    scrape_interval: 15s
+
+  - job_name: "mongodb"
+    static_configs:
+      - targets: ["localhost:27017"]
+    metrics_path: "/metrics"
+    scrape_interval: 15s
+
+  - job_name: "etcd"
+    static_configs:
+      - targets: ["localhost:2379"]
+    metrics_path: "/metrics"
+    scrape_interval: 15s
+
+  - job_name: "nsq"
+    static_configs:
+      - targets: 
+          - "localhost:4150"
+          - "localhost:4151"
+    metrics_path: "/stats"
+    scrape_interval: 15s
+
+  # 系统级监控
+  - job_name: "node-exporter"
+    static_configs:
+      - targets: ["localhost:9100"]
+    scrape_interval: 15s
