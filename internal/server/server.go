@@ -27,112 +27,6 @@ type Server interface {
 	GetStatus() string
 }
 
-// ComponentOptions 声明当前节点需要初始化的基础组件。
-type ComponentOptions struct {
-	ActorSystem      bool
-	RPCServer        bool
-	RPCClient        bool
-	Redis            bool
-	MongoDB          bool
-	NSQ              bool
-	MessageBroker    bool
-	Registry         bool
-	ServiceDiscovery bool
-}
-
-// DefaultComponentOptions 保持旧 NewBaseServer 的全量组件初始化行为。
-func DefaultComponentOptions() ComponentOptions {
-	return ComponentOptions{
-		ActorSystem:      true,
-		RPCServer:        true,
-		Redis:            true,
-		MongoDB:          true,
-		NSQ:              true,
-		MessageBroker:    true,
-		Registry:         true,
-		ServiceDiscovery: true,
-	}
-}
-
-func GatewayComponents() ComponentOptions {
-	return ComponentOptions{
-		ActorSystem:      true,
-		RPCServer:        true,
-		Redis:            true,
-		NSQ:              true,
-		MessageBroker:    true,
-		Registry:         true,
-		ServiceDiscovery: true,
-	}
-}
-
-func LoginComponents() ComponentOptions {
-	return ComponentOptions{
-		ActorSystem:      true,
-		RPCServer:        true,
-		Redis:            true,
-		MongoDB:          true,
-		NSQ:              true,
-		MessageBroker:    true,
-		Registry:         true,
-		ServiceDiscovery: true,
-	}
-}
-
-func MongoServiceComponents() ComponentOptions {
-	return ComponentOptions{
-		RPCServer:        true,
-		MongoDB:          true,
-		NSQ:              true,
-		MessageBroker:    true,
-		Registry:         true,
-		ServiceDiscovery: true,
-	}
-}
-
-func LobbyComponents() ComponentOptions {
-	return MongoServiceComponents()
-}
-
-func GameComponents() ComponentOptions {
-	return MongoServiceComponents()
-}
-
-func FriendComponents() ComponentOptions {
-	return MongoServiceComponents()
-}
-
-func ChatComponents() ComponentOptions {
-	return MongoServiceComponents()
-}
-
-func MailComponents() ComponentOptions {
-	return MongoServiceComponents()
-}
-
-func GMComponents() ComponentOptions {
-	return MongoServiceComponents()
-}
-
-func CenterComponents() ComponentOptions {
-	return ComponentOptions{
-		RPCServer:     true,
-		NSQ:           true,
-		MessageBroker: true,
-		Registry:      true,
-	}
-}
-
-func EnhancedGameComponents() ComponentOptions {
-	return ComponentOptions{
-		RPCServer:        true,
-		NSQ:              true,
-		MessageBroker:    true,
-		Registry:         true,
-		ServiceDiscovery: true,
-	}
-}
-
 // BaseServer 基础服务器实现
 type BaseServer struct {
 	config   *ServerConfig
@@ -166,6 +60,14 @@ func NewBaseServer(configFile, nodeType, nodeID string) (*BaseServer, error) {
 
 // NewBaseServerWithOptions 按需创建基础服务器。
 func NewBaseServerWithOptions(configFile, nodeType, nodeID string, opts ComponentOptions) (*BaseServer, error) {
+	return NewBaseServerWithFactory(configFile, nodeType, nodeID, opts, NewDefaultComponentFactory())
+}
+
+func NewBaseServerWithFactory(configFile, nodeType, nodeID string, opts ComponentOptions, factory ComponentFactory) (*BaseServer, error) {
+	if factory == nil {
+		factory = NewDefaultComponentFactory()
+	}
+
 	// 加载配置
 	config, err := loadConfig(configFile)
 	if err != nil {
@@ -187,88 +89,13 @@ func NewBaseServerWithOptions(configFile, nodeType, nodeID string, opts Componen
 	}
 
 	// 初始化组件
-	if err := server.initComponents(opts); err != nil {
+	if err := server.initComponents(opts, factory); err != nil {
 		cancel()
 		return nil, fmt.Errorf("failed to init components: %v", err)
 	}
 
 	logger.Info(fmt.Sprintf("Server %s/%s initialized", nodeType, nodeID))
 	return server, nil
-}
-
-// initComponents 初始化组件
-func (bs *BaseServer) initComponents(opts ComponentOptions) error {
-	if opts.ActorSystem {
-		bs.actorSystem = actor.NewActorSystem(fmt.Sprintf("%s-%s", bs.nodeType, bs.nodeID))
-	}
-
-	if opts.Redis {
-		redisManager, err := database.NewRedisManager(&bs.config.Database.Redis)
-		if err != nil {
-			return fmt.Errorf("failed to init redis: %v", err)
-		}
-		bs.redisManager = redisManager
-	}
-
-	if opts.MongoDB {
-		mongoManager, err := database.NewMongoManager(&bs.config.Database.MongoDB)
-		if err != nil {
-			return fmt.Errorf("failed to init mongodb: %v", err)
-		}
-		bs.mongoManager = mongoManager
-	}
-
-	if opts.NSQ {
-		nsqManager, err := mq.NewNSQManager(&bs.config.NSQ)
-		if err != nil {
-			return fmt.Errorf("failed to init nsq: %v", err)
-		}
-		bs.nsqManager = nsqManager
-	}
-
-	if opts.MessageBroker {
-		if bs.nsqManager == nil {
-			return fmt.Errorf("message broker requires nsq manager")
-		}
-		bs.messageBroker = mq.NewMessageBroker(bs.nsqManager, bs.nodeID)
-	}
-
-	if opts.Registry {
-		registry, err := discovery.NewETCDRegistry(&bs.config.ETCD)
-		if err != nil {
-			return fmt.Errorf("failed to init etcd registry: %v", err)
-		}
-		bs.registry = registry
-	}
-
-	if opts.ServiceDiscovery {
-		if bs.registry == nil {
-			return fmt.Errorf("service discovery requires registry")
-		}
-		bs.discovery = discovery.NewServiceDiscovery(
-			bs.registry,
-			bs.nodeType,
-			discovery.NewWeightedLoadBalancer(),
-		)
-	}
-
-	if opts.RPCServer {
-		bs.rpcServer = rpc.NewRPCServer("0.0.0.0", bs.config.Network.RPCPort)
-		bs.rpcServer.SetFrameOptions(
-			time.Duration(bs.config.Network.ReadTimeout)*time.Second,
-			time.Duration(bs.config.Network.WriteTimeout)*time.Second,
-			bs.maxPacketSize(),
-		)
-	}
-
-	return nil
-}
-
-func (bs *BaseServer) maxPacketSize() uint32 {
-	if bs.config.Network.MaxPacketSize <= 0 {
-		return network.DefaultMaxFrame
-	}
-	return uint32(bs.config.Network.MaxPacketSize)
 }
 
 func (bs *BaseServer) authTokenSecret() ([]byte, error) {
