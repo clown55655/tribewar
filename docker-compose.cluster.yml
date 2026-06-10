@@ -114,7 +114,7 @@ services:
 
   # MongoDB 副本集部署 (3节点)
   mongodb-rs-1:
-    image: mongo:6.0
+    image: mongo:8.0
     container_name: tribeway-mongodb-rs-1
     ports:
       - "27017:27017"
@@ -133,7 +133,7 @@ services:
         ipv4_address: 172.20.2.1
 
   mongodb-rs-2:
-    image: mongo:6.0
+    image: mongo:8.0
     container_name: tribeway-mongodb-rs-2
     ports:
       - "27018:27017"
@@ -151,7 +151,7 @@ services:
         ipv4_address: 172.20.2.2
 
   mongodb-rs-3:
-    image: mongo:6.0
+    image: mongo:8.0
     container_name: tribeway-mongodb-rs-3
     ports:
       - "27019:27017"
@@ -170,7 +170,7 @@ services:
 
   # MongoDB 副本集初始化
   mongodb-rs-init:
-    image: mongo:6.0
+    image: mongo:8.0
     container_name: tribeway-mongodb-rs-init
     depends_on:
       - mongodb-rs-1
@@ -195,7 +195,7 @@ services:
 
   # ETCD 集群部署 (3节点)
   etcd-1:
-    image: quay.io/coreos/etcd:v3.5.9
+    image: quay.io/coreos/etcd:v3.6.12
     container_name: tribeway-etcd-1
     ports:
       - "2379:2379"
@@ -216,7 +216,7 @@ services:
         ipv4_address: 172.20.3.1
 
   etcd-2:
-    image: quay.io/coreos/etcd:v3.5.9
+    image: quay.io/coreos/etcd:v3.6.12
     container_name: tribeway-etcd-2
     ports:
       - "2381:2379"
@@ -237,7 +237,7 @@ services:
         ipv4_address: 172.20.3.2
 
   etcd-3:
-    image: quay.io/coreos/etcd:v3.5.9
+    image: quay.io/coreos/etcd:v3.6.12
     container_name: tribeway-etcd-3
     ports:
       - "2383:2379"
@@ -259,7 +259,7 @@ services:
 
   # NSQ 集群部署
   nsqlookupd-1:
-    image: nsqio/nsq:v1.2.1
+    image: nsqio/nsq:v1.3.0
     container_name: tribeway-nsqlookupd-1
     command: /nsqlookupd
     ports:
@@ -270,7 +270,7 @@ services:
         ipv4_address: 172.20.4.1
 
   nsqlookupd-2:
-    image: nsqio/nsq:v1.2.1
+    image: nsqio/nsq:v1.3.0
     container_name: tribeway-nsqlookupd-2
     command: /nsqlookupd
     ports:
@@ -281,7 +281,7 @@ services:
         ipv4_address: 172.20.4.2
 
   nsqd-1:
-    image: nsqio/nsq:v1.2.1
+    image: nsqio/nsq:v1.3.0
     container_name: tribeway-nsqd-1
     command: /nsqd --lookupd-tcp-address=172.20.4.1:4160 --lookupd-tcp-address=172.20.4.2:4160 --broadcast-address=172.20.4.11
     ports:
@@ -295,7 +295,7 @@ services:
         ipv4_address: 172.20.4.11
 
   nsqd-2:
-    image: nsqio/nsq:v1.2.1
+    image: nsqio/nsq:v1.3.0
     container_name: tribeway-nsqd-2
     command: /nsqd --lookupd-tcp-address=172.20.4.1:4160 --lookupd-tcp-address=172.20.4.2:4160 --broadcast-address=172.20.4.12
     ports:
@@ -309,7 +309,7 @@ services:
         ipv4_address: 172.20.4.12
 
   nsqd-3:
-    image: nsqio/nsq:v1.2.1
+    image: nsqio/nsq:v1.3.0
     container_name: tribeway-nsqd-3
     command: /nsqd --lookupd-tcp-address=172.20.4.1:4160 --lookupd-tcp-address=172.20.4.2:4160 --broadcast-address=172.20.4.13
     ports:

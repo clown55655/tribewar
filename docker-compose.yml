@@ -27,7 +27,7 @@ services:
       retries: 3
 
   mongodb:
-    image: mongo:6.0
+    image: mongo:8.0
     container_name: tribeway-mongodb
     ports:
       - "27017:27017"
@@ -47,7 +47,7 @@ services:
       retries: 3
 
   etcd:
-    image: quay.io/coreos/etcd:v3.5.9
+    image: quay.io/coreos/etcd:v3.6.12
     container_name: tribeway-etcd
     ports:
       - "2379:2379"
@@ -73,7 +73,7 @@ services:
       retries: 3
 
   nsqlookupd:
-    image: nsqio/nsq:v1.2.1
+    image: nsqio/nsq:v1.3.0
     container_name: tribeway-nsqlookupd
     command: /nsqlookupd
     ports:
@@ -83,7 +83,7 @@ services:
       - tribeway-network
 
   nsqd:
-    image: nsqio/nsq:v1.2.1
+    image: nsqio/nsq:v1.3.0
     container_name: tribeway-nsqd
     command: /nsqd --lookupd-tcp-address=nsqlookupd:4160
     ports:
@@ -367,7 +367,7 @@ services:
 
   # 监控和管理工具
   nsqadmin:
-    image: nsqio/nsq:v1.2.1
+    image: nsqio/nsq:v1.3.0
     container_name: tribeway-nsqadmin
     command: /nsqadmin --lookupd-http-address=nsqlookupd:4161
     ports:
