@@ -91,11 +91,31 @@ func NewBaseServerWithFactory(configFile, nodeType, nodeID string, opts Componen
 	// 初始化组件
 	if err := server.initComponents(opts, factory); err != nil {
 		cancel()
+		if stopErr := server.stopComponents(); stopErr != nil {
+			logger.Warnf("Failed to clean up initialized components: %v", stopErr)
+		}
 		return nil, fmt.Errorf("failed to init components: %v", err)
 	}
 
 	logger.Info(fmt.Sprintf("Server %s/%s initialized", nodeType, nodeID))
 	return server, nil
+}
+
+func cleanupBaseServerAfterConstructorError(server *BaseServer) {
+	if server == nil {
+		return
+	}
+	server.cancel()
+	if err := server.stopComponents(); err != nil {
+		logger.Warnf("Failed to clean up server after constructor error: %v", err)
+	}
+}
+
+func cleanupBaseServerUnlessConstructed(server *BaseServer, constructed *bool) {
+	if constructed != nil && *constructed {
+		return
+	}
+	cleanupBaseServerAfterConstructorError(server)
 }
 
 func (bs *BaseServer) authTokenSecret() ([]byte, error) {
@@ -182,6 +202,17 @@ func (bs *BaseServer) Start() error {
 	}
 
 	logger.Info(fmt.Sprintf("Starting server %s/%s", bs.nodeType, bs.nodeID))
+	started := false
+	defer func() {
+		if !started {
+			bs.cancel()
+			if err := bs.stopComponents(); err != nil {
+				logger.Warnf("Failed to roll back server start for %s/%s: %v", bs.nodeType, bs.nodeID, err)
+			}
+			bs.wg.Wait()
+			bs.status = "stopped"
+		}
+	}()
 
 	if bs.rpcServer != nil {
 		if err := bs.rpcServer.Start(); err != nil {
@@ -211,6 +242,7 @@ func (bs *BaseServer) Start() error {
 	}
 
 	bs.status = "running"
+	started = true
 	logger.Info(fmt.Sprintf("Server %s/%s started", bs.nodeType, bs.nodeID))
 
 	return nil
@@ -335,30 +367,37 @@ func (bs *BaseServer) GetDiscovery() *discovery.ServiceDiscovery {
 
 // NewServer 创建新服务器
 func NewServer(configFile, nodeType, nodeID string) Server {
+	srv, err := NewServerWithError(configFile, nodeType, nodeID)
+	if err != nil {
+		logger.Fatal(err.Error())
+	}
+	return srv
+}
+
+func NewServerWithError(configFile, nodeType, nodeID string) (Server, error) {
 	switch nodeType {
 	case "gateway":
-		return NewGatewayServer(configFile, nodeID)
+		return NewGatewayServerWithError(configFile, nodeID)
 	case "login":
-		return NewLoginServer(configFile, nodeID)
+		return NewLoginServerWithError(configFile, nodeID)
 	case "lobby":
-		return NewLobbyServer(configFile, nodeID)
+		return NewLobbyServerWithError(configFile, nodeID)
 	case "game":
-		return NewGameServer(configFile, nodeID)
+		return NewGameServerWithError(configFile, nodeID)
 	case "enhanced_game":
-		return NewEnhancedGameServer(configFile, nodeID)
+		return NewEnhancedGameServerWithError(configFile, nodeID)
 	case "friend":
-		return NewFriendServer(configFile, nodeID)
+		return NewFriendServerWithError(configFile, nodeID)
 	case "chat":
-		return NewChatServer(configFile, nodeID)
+		return NewChatServerWithError(configFile, nodeID)
 	case "mail":
-		return NewMailServer(configFile, nodeID)
+		return NewMailServerWithError(configFile, nodeID)
 	case "gm":
-		return NewGMServer(configFile, nodeID)
+		return NewGMServerWithError(configFile, nodeID)
 	case "center":
-		return NewCenterServer(configFile, nodeID)
+		return NewCenterServerWithError(configFile, nodeID)
 	default:
-		logger.Fatal(fmt.Sprintf("Unknown node type: %s", nodeType))
-		return nil
+		return nil, fmt.Errorf("unknown node type: %s", nodeType)
 	}
 }
 

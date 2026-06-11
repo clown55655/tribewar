@@ -20,34 +20,52 @@ type CenterServer struct {
 
 // NewCenterServer 创建中心服务器
 func NewCenterServer(configFile, nodeID string) *CenterServer {
+	centerServer, err := NewCenterServerWithError(configFile, nodeID)
+	if err != nil {
+		logger.Fatal(fmt.Sprintf("Failed to create center server: %v", err))
+	}
+	return centerServer
+}
+
+func NewCenterServerWithError(configFile, nodeID string) (*CenterServer, error) {
 	baseServer, err := NewBaseServerWithOptions(configFile, "center", nodeID, CenterComponents())
 	if err != nil {
-		logger.Fatal(fmt.Sprintf("Failed to create base server: %v", err))
+		return nil, fmt.Errorf("failed to create base server: %v", err)
 	}
+	constructed := false
+	defer cleanupBaseServerUnlessConstructed(baseServer, &constructed)
 
 	centerServer := &CenterServer{
 		BaseServer: baseServer,
 	}
 
-	// 注册通用服务
 	if err := RegisterCommonServices(baseServer); err != nil {
-		logger.Fatal(fmt.Sprintf("Failed to register common services: %v", err))
+		return nil, fmt.Errorf("failed to register common services: %v", err)
 	}
 
-	// 注册中心服务
 	centerService := NewCenterService(centerServer)
 	if err := baseServer.rpcServer.RegisterService(centerService); err != nil {
-		logger.Fatal(fmt.Sprintf("Failed to register center service: %v", err))
+		return nil, fmt.Errorf("failed to register center service: %v", err)
 	}
 
-	// 启动管理任务
-	go centerServer.managementLoop()
-
-	return centerServer
+	constructed = true
+	return centerServer, nil
 }
 
 // managementLoop 管理循环
+func (cs *CenterServer) Start() error {
+	if err := cs.BaseServer.Start(); err != nil {
+		return err
+	}
+
+	cs.wg.Add(1)
+	go cs.managementLoop()
+	return nil
+}
+
 func (cs *CenterServer) managementLoop() {
+	defer cs.wg.Done()
+
 	ticker := time.NewTicker(60 * time.Second)
 	defer ticker.Stop()
 

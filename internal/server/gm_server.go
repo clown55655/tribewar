@@ -24,10 +24,20 @@ type GMServer struct {
 
 // NewGMServer 创建GM服务器
 func NewGMServer(configFile, nodeID string) *GMServer {
+	gmServer, err := NewGMServerWithError(configFile, nodeID)
+	if err != nil {
+		logger.Fatal(fmt.Sprintf("Failed to create gm server: %v", err))
+	}
+	return gmServer
+}
+
+func NewGMServerWithError(configFile, nodeID string) (*GMServer, error) {
 	baseServer, err := NewBaseServerWithOptions(configFile, "gm", nodeID, GMComponents())
 	if err != nil {
-		logger.Fatal(fmt.Sprintf("Failed to create base server: %v", err))
+		return nil, fmt.Errorf("failed to create base server: %v", err)
 	}
+	constructed := false
+	defer cleanupBaseServerUnlessConstructed(baseServer, &constructed)
 
 	gmServer := &GMServer{
 		BaseServer: baseServer,
@@ -35,18 +45,16 @@ func NewGMServer(configFile, nodeID string) *GMServer {
 		userRepo:   database.NewUserRepository(baseServer.mongoManager),
 	}
 
-	// 注册通用服务
 	if err := RegisterCommonServices(baseServer); err != nil {
-		logger.Fatal(fmt.Sprintf("Failed to register common services: %v", err))
+		return nil, fmt.Errorf("failed to register common services: %v", err)
 	}
 
-	// 注册GM服务
 	gmService := NewGMService(gmServer)
 	if err := baseServer.rpcServer.RegisterService(gmService); err != nil {
-		logger.Fatal(fmt.Sprintf("Failed to register gm service: %v", err))
+		return nil, fmt.Errorf("failed to register gm service: %v", err)
 	}
-
-	return gmServer
+	constructed = true
+	return gmServer, nil
 }
 
 // GMService GM RPC服务

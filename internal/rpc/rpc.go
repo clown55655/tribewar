@@ -242,7 +242,7 @@ func (s *RPCServer) handleRequest(data []byte) *RPCResponse {
 
 	// 调用方法
 	start := time.Now()
-	result, err := s.callMethod(method, request.Args, request.UserID, request.Session)
+	result, err := s.callMethod(method, request.Args, request.UserID, request.Session, time.Duration(request.Timeout)*time.Millisecond)
 	duration := time.Since(start)
 
 	logger.Debug(fmt.Sprintf("RPC call %s took %v", methodKey, duration))
@@ -258,7 +258,7 @@ func (s *RPCServer) handleRequest(data []byte) *RPCResponse {
 }
 
 // callMethod 调用方法
-func (s *RPCServer) callMethod(method reflect.Value, args []byte, requestUserID uint64, requestSession string) ([]byte, error) {
+func (s *RPCServer) callMethod(method reflect.Value, args []byte, requestUserID uint64, requestSession string, timeout time.Duration) ([]byte, error) {
 	methodType := method.Type()
 	if methodType.NumIn() != 2 {
 		return nil, fmt.Errorf("method must have exactly 2 parameters")
@@ -276,6 +276,11 @@ func (s *RPCServer) callMethod(method reflect.Value, args []byte, requestUserID 
 	}
 
 	callCtx := context.Background()
+	var cancel context.CancelFunc
+	if timeout > 0 {
+		callCtx, cancel = context.WithTimeout(callCtx, timeout)
+		defer cancel()
+	}
 	if requestUserID > 0 {
 		callCtx = context.WithValue(callCtx, "user_id", requestUserID)
 	}

@@ -35,32 +35,40 @@ type EnhancedGameServer struct {
 
 // NewEnhancedGameServer 创建增强版游戏服务器
 func NewEnhancedGameServer(configFile, nodeID string) *EnhancedGameServer {
+	enhancedServer, err := NewEnhancedGameServerWithError(configFile, nodeID)
+	if err != nil {
+		logger.Fatal(fmt.Sprintf("Failed to create enhanced game server: %v", err))
+	}
+	return enhancedServer
+}
+
+func NewEnhancedGameServerWithError(configFile, nodeID string) (*EnhancedGameServer, error) {
 	baseServer, err := NewBaseServerWithOptions(configFile, "game", nodeID, EnhancedGameComponents())
 	if err != nil {
-		logger.Fatal(fmt.Sprintf("Failed to create base server: %v", err))
+		return nil, fmt.Errorf("failed to create base server: %v", err)
 	}
+	constructed := false
+	defer cleanupBaseServerUnlessConstructed(baseServer, &constructed)
 
 	enhancedServer := &EnhancedGameServer{
 		BaseServer: baseServer,
 	}
 
-	// 初始化扩展组件
 	if err := enhancedServer.initEnhancedComponents(); err != nil {
-		logger.Fatal(fmt.Sprintf("Failed to init enhanced components: %v", err))
+		return nil, fmt.Errorf("failed to init enhanced components: %v", err)
 	}
 
-	// 注册通用服务
 	if err := RegisterCommonServices(baseServer); err != nil {
-		logger.Fatal(fmt.Sprintf("Failed to register common services: %v", err))
+		return nil, fmt.Errorf("failed to register common services: %v", err)
 	}
 
-	// 注册增强游戏服务
 	enhancedGameService := NewEnhancedGameService(enhancedServer)
 	if err := baseServer.rpcServer.RegisterService(enhancedGameService); err != nil {
-		logger.Fatal(fmt.Sprintf("Failed to register enhanced game service: %v", err))
+		return nil, fmt.Errorf("failed to register enhanced game service: %v", err)
 	}
 
-	return enhancedServer
+	constructed = true
+	return enhancedServer, nil
 }
 
 // initEnhancedComponents 初始化增强组件

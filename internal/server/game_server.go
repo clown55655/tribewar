@@ -50,10 +50,20 @@ type GamePlayerData struct {
 
 // NewGameServer 创建游戏服务器
 func NewGameServer(configFile, nodeID string) *GameServer {
+	gameServer, err := NewGameServerWithError(configFile, nodeID)
+	if err != nil {
+		logger.Fatal(fmt.Sprintf("Failed to create game server: %v", err))
+	}
+	return gameServer
+}
+
+func NewGameServerWithError(configFile, nodeID string) (*GameServer, error) {
 	baseServer, err := NewBaseServerWithOptions(configFile, "game", nodeID, GameComponents())
 	if err != nil {
-		logger.Fatal(fmt.Sprintf("Failed to create base server: %v", err))
+		return nil, fmt.Errorf("failed to create base server: %v", err)
 	}
+	constructed := false
+	defer cleanupBaseServerUnlessConstructed(baseServer, &constructed)
 
 	gameServer := &GameServer{
 		BaseServer:     baseServer,
@@ -62,18 +72,16 @@ func NewGameServer(configFile, nodeID string) *GameServer {
 		nextGameID:     1,
 	}
 
-	// 注册通用服务
 	if err := RegisterCommonServices(baseServer); err != nil {
-		logger.Fatal(fmt.Sprintf("Failed to register common services: %v", err))
+		return nil, fmt.Errorf("failed to register common services: %v", err)
 	}
 
-	// 注册游戏服务
 	gameService := NewGameService(gameServer)
 	if err := baseServer.rpcServer.RegisterService(gameService); err != nil {
-		logger.Fatal(fmt.Sprintf("Failed to register game service: %v", err))
+		return nil, fmt.Errorf("failed to register game service: %v", err)
 	}
-
-	return gameServer
+	constructed = true
+	return gameServer, nil
 }
 
 // generateGameID 生成游戏ID

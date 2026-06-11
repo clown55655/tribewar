@@ -345,10 +345,14 @@ func NewUserRepository(mm *MongoManager) *UserRepository {
 
 // Create 创建用户
 func (ur *UserRepository) Create(user *User) error {
+	return ur.CreateContext(context.Background(), user)
+}
+
+func (ur *UserRepository) CreateContext(ctx context.Context, user *User) error {
 	user.CreatedAt = time.Now()
 	user.UpdatedAt = time.Now()
 
-	result, err := ur.collection.InsertOne(context.Background(), user)
+	result, err := ur.collection.InsertOne(ctx, user)
 	if err != nil {
 		return fmt.Errorf("failed to create user: %v", err)
 	}
@@ -359,8 +363,12 @@ func (ur *UserRepository) Create(user *User) error {
 
 // GetByUserID 根据用户ID获取用户
 func (ur *UserRepository) GetByUserID(userID uint64) (*User, error) {
+	return ur.GetByUserIDContext(context.Background(), userID)
+}
+
+func (ur *UserRepository) GetByUserIDContext(ctx context.Context, userID uint64) (*User, error) {
 	var user User
-	err := ur.collection.FindOne(context.Background(), bson.M{"user_id": userID}).Decode(&user)
+	err := ur.collection.FindOne(ctx, bson.M{"user_id": userID}).Decode(&user)
 	if err != nil {
 		if err == mongo.ErrNoDocuments {
 			return nil, fmt.Errorf("user not found")
@@ -372,8 +380,12 @@ func (ur *UserRepository) GetByUserID(userID uint64) (*User, error) {
 
 // GetByUsername 根据用户名获取用户
 func (ur *UserRepository) GetByUsername(username string) (*User, error) {
+	return ur.GetByUsernameContext(context.Background(), username)
+}
+
+func (ur *UserRepository) GetByUsernameContext(ctx context.Context, username string) (*User, error) {
 	var user User
-	err := ur.collection.FindOne(context.Background(), bson.M{"username": username}).Decode(&user)
+	err := ur.collection.FindOne(ctx, bson.M{"username": username}).Decode(&user)
 	if err != nil {
 		if err == mongo.ErrNoDocuments {
 			return nil, fmt.Errorf("user not found")
@@ -385,12 +397,16 @@ func (ur *UserRepository) GetByUsername(username string) (*User, error) {
 
 // Update 更新用户
 func (ur *UserRepository) Update(user *User) error {
+	return ur.UpdateContext(context.Background(), user)
+}
+
+func (ur *UserRepository) UpdateContext(ctx context.Context, user *User) error {
 	user.UpdatedAt = time.Now()
 
 	filter := bson.M{"user_id": user.UserID}
 	update := bson.M{"$set": user}
 
-	_, err := ur.collection.UpdateOne(context.Background(), filter, update)
+	_, err := ur.collection.UpdateOne(ctx, filter, update)
 	if err != nil {
 		return fmt.Errorf("failed to update user: %v", err)
 	}
@@ -399,12 +415,16 @@ func (ur *UserRepository) Update(user *User) error {
 
 // UpdateFields 更新指定字段
 func (ur *UserRepository) UpdateFields(userID uint64, fields bson.M) error {
+	return ur.UpdateFieldsContext(context.Background(), userID, fields)
+}
+
+func (ur *UserRepository) UpdateFieldsContext(ctx context.Context, userID uint64, fields bson.M) error {
 	fields["updated_at"] = time.Now()
 
 	filter := bson.M{"user_id": userID}
 	update := bson.M{"$set": fields}
 
-	_, err := ur.collection.UpdateOne(context.Background(), filter, update)
+	_, err := ur.collection.UpdateOne(ctx, filter, update)
 	if err != nil {
 		return fmt.Errorf("failed to update user fields: %v", err)
 	}

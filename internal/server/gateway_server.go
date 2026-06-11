@@ -10,6 +10,7 @@ import (
 	"tribeway/internal/database"
 	"tribeway/internal/logger"
 	"tribeway/internal/network"
+	"tribeway/internal/rpc"
 	"tribeway/pkg/proto"
 )
 
@@ -21,10 +22,20 @@ type GatewayServer struct {
 
 // NewGatewayServer 创建网关服务器
 func NewGatewayServer(configFile, nodeID string) *GatewayServer {
+	gatewayServer, err := NewGatewayServerWithError(configFile, nodeID)
+	if err != nil {
+		logger.Fatal(fmt.Sprintf("Failed to create gateway server: %v", err))
+	}
+	return gatewayServer
+}
+
+func NewGatewayServerWithError(configFile, nodeID string) (*GatewayServer, error) {
 	baseServer, err := NewBaseServerWithOptions(configFile, "gateway", nodeID, GatewayComponents())
 	if err != nil {
-		logger.Fatal(fmt.Sprintf("Failed to create base server: %v", err))
+		return nil, fmt.Errorf("failed to create base server: %v", err)
 	}
+	constructed := false
+	defer cleanupBaseServerUnlessConstructed(baseServer, &constructed)
 
 	gatewayServer := &GatewayServer{
 		BaseServer:     baseServer,
@@ -47,22 +58,23 @@ func NewGatewayServer(configFile, nodeID string) *GatewayServer {
 
 	// 注册通用服务
 	if err := RegisterCommonServices(baseServer); err != nil {
-		logger.Fatal(fmt.Sprintf("Failed to register common services: %v", err))
+		return nil, fmt.Errorf("failed to register common services: %v", err)
 	}
 
 	// 注册网关服务
 	gatewayService := NewGatewayService(gatewayServer)
 	if err := baseServer.rpcServer.RegisterService(gatewayService); err != nil {
-		logger.Fatal(fmt.Sprintf("Failed to register gateway service: %v", err))
+		return nil, fmt.Errorf("failed to register gateway service: %v", err)
 	}
 
 	// 创建网关Actor
 	gatewayActor := NewGatewayActor(gatewayServer)
 	if err := baseServer.actorSystem.SpawnActor(gatewayActor); err != nil {
-		logger.Fatal(fmt.Sprintf("Failed to spawn gateway actor: %v", err))
+		return nil, fmt.Errorf("failed to spawn gateway actor: %v", err)
 	}
 
-	return gatewayServer
+	constructed = true
+	return gatewayServer, nil
 }
 
 // Start 启动网关服务器
@@ -74,6 +86,9 @@ func (gs *GatewayServer) Start() error {
 
 	// 启动TCP服务器
 	if err := gs.tcpServer.Start(); err != nil {
+		if stopErr := gs.BaseServer.Stop(); stopErr != nil {
+			logger.Warnf("Failed to stop base server after tcp start failure: %v", stopErr)
+		}
 		return fmt.Errorf("failed to start tcp server: %v", err)
 	}
 
@@ -85,10 +100,6 @@ func (gs *GatewayServer) Start() error {
 
 // Stop 停止网关服务器
 func (gs *GatewayServer) Stop() error {
-	if gs.tcpServer != nil {
-		gs.tcpServer.Stop()
-	}
-
 	return gs.BaseServer.Stop()
 }
 
@@ -143,36 +154,54 @@ func (gmh *GatewayMessageHandler) routeMessage(conn *network.Connection, msgID u
 
 // handleLogin 处理登录
 func (gmh *GatewayMessageHandler) handleLogin(conn *network.Connection, request *proto.BaseRequest) error {
-	// 解析登录请求
 	var loginReq proto.LoginRequest
 	if err := proto.Unmarshal(request.Data, &loginReq); err != nil {
 		return fmt.Errorf("failed to unmarshal login request: %v", err)
 	}
 
-	// 获取登录服务
 	loginService := gmh.server.discovery.GetService("login")
 	if loginService == nil {
 		return gmh.sendError(conn, request, -1, "login service not available")
 	}
 
-	// TODO: 通过RPC调用登录服务
-	// 简化实现：直接返回成功响应
 	logger.Info(fmt.Sprintf("Login request for user: %s", loginReq.Username))
 
-	// 模拟登录成功响应
-	loginResp := proto.LoginResponse{
-		UserId: 12345,
-		Token:  "mock_token_" + loginReq.Username,
+	client := rpc.NewRPCClient(loginService.Address, loginService.Port)
+	client.SetFrameOptions(
+		time.Duration(gmh.server.config.Network.ReadTimeout)*time.Second,
+		time.Duration(gmh.server.config.Network.WriteTimeout)*time.Second,
+		gmh.server.maxPacketSize(),
+	)
+	if err := client.Connect(); err != nil {
+		logger.Warn(fmt.Sprintf("Failed to connect login service %s:%d: %v", loginService.Address, loginService.Port, err))
+		return gmh.sendError(conn, request, -2, "login service unavailable")
+	}
+	defer client.Disconnect()
+
+	responseData, err := client.Call("LoginService", "Login", &loginReq, 5*time.Second)
+	if err != nil {
+		logger.Warn(fmt.Sprintf("Login RPC failed for user %s: %v", loginReq.Username, err))
+		return gmh.sendError(conn, request, -3, "login failed")
 	}
 
-	// 绑定连接到用户
+	var loginResp proto.LoginResponse
+	if err := proto.Unmarshal(responseData, &loginResp); err != nil {
+		logger.Error(fmt.Sprintf("Failed to unmarshal login response: %v", err))
+		return gmh.sendError(conn, request, -4, "invalid login response")
+	}
+	if loginResp.UserId == 0 || loginResp.Token == "" {
+		logger.Warn(fmt.Sprintf("Login service returned incomplete response for user %s", loginReq.Username))
+		return gmh.sendError(conn, request, -5, "invalid login response")
+	}
+
 	conn.UserID = loginResp.UserId
+	conn.SessionID = loginResp.Token
 
-	// 设置用户在线状态
 	userCache := database.NewUserCache(gmh.server.redisManager)
-	userCache.SetUserOnline(loginResp.UserId, gmh.server.nodeID)
+	if err := userCache.SetUserOnline(loginResp.UserId, gmh.server.nodeID); err != nil {
+		logger.Warn(fmt.Sprintf("Failed to set user online cache for %d: %v", loginResp.UserId, err))
+	}
 
-	// 发送响应
 	return gmh.sendResponse(conn, request, 0, "login success", &loginResp)
 }
 
@@ -203,7 +232,6 @@ func (gmh *GatewayMessageHandler) handleLogout(conn *network.Connection, request
 
 // forwardMessage 转发消息
 func (gmh *GatewayMessageHandler) forwardMessage(conn *network.Connection, msgID uint32, request *proto.BaseRequest) error {
-	// 根据消息ID确定目标服务
 	var targetService string
 
 	switch {
@@ -221,18 +249,15 @@ func (gmh *GatewayMessageHandler) forwardMessage(conn *network.Connection, msgID
 		return gmh.sendError(conn, request, -1, "unknown message type")
 	}
 
-	// 获取目标服务实例
 	service := gmh.server.discovery.GetService(targetService)
 	if service == nil {
 		return gmh.sendError(conn, request, -2, fmt.Sprintf("%s service not available", targetService))
 	}
 
-	// TODO: 通过RPC转发消息
-	// 简化实现：直接返回成功响应
-	logger.Info(fmt.Sprintf("Forwarding message ID %d to service: %s", msgID, targetService))
+	logger.Warn(fmt.Sprintf("Forwarding message ID %d to service %s is not implemented; target instance %s:%d",
+		msgID, targetService, service.Address, service.Port))
 
-	// 模拟服务调用成功响应
-	return gmh.sendResponse(conn, request, 0, "success", nil)
+	return gmh.sendError(conn, request, -3, "message forwarding not implemented")
 }
 
 // sendResponse 发送响应

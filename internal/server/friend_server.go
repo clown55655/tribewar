@@ -19,28 +19,36 @@ type FriendServer struct {
 
 // NewFriendServer 创建好友服务器
 func NewFriendServer(configFile, nodeID string) *FriendServer {
+	friendServer, err := NewFriendServerWithError(configFile, nodeID)
+	if err != nil {
+		logger.Fatal(fmt.Sprintf("Failed to create friend server: %v", err))
+	}
+	return friendServer
+}
+
+func NewFriendServerWithError(configFile, nodeID string) (*FriendServer, error) {
 	baseServer, err := NewBaseServerWithOptions(configFile, "friend", nodeID, FriendComponents())
 	if err != nil {
-		logger.Fatal(fmt.Sprintf("Failed to create base server: %v", err))
+		return nil, fmt.Errorf("failed to create base server: %v", err)
 	}
+	constructed := false
+	defer cleanupBaseServerUnlessConstructed(baseServer, &constructed)
 
 	friendServer := &FriendServer{
 		BaseServer: baseServer,
 		friendRepo: database.NewFriendRepository(baseServer.mongoManager),
 	}
 
-	// 注册通用服务
 	if err := RegisterCommonServices(baseServer); err != nil {
-		logger.Fatal(fmt.Sprintf("Failed to register common services: %v", err))
+		return nil, fmt.Errorf("failed to register common services: %v", err)
 	}
 
-	// 注册好友服务
 	friendService := NewFriendService(friendServer)
 	if err := baseServer.rpcServer.RegisterService(friendService); err != nil {
-		logger.Fatal(fmt.Sprintf("Failed to register friend service: %v", err))
+		return nil, fmt.Errorf("failed to register friend service: %v", err)
 	}
-
-	return friendServer
+	constructed = true
+	return friendServer, nil
 }
 
 // FriendService 好友RPC服务

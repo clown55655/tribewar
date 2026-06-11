@@ -23,7 +23,11 @@ func main() {
 		os.Exit(1)
 	}
 
-	srv := server.NewServer(*configFile, *nodeType, *nodeID)
+	srv, err := server.NewServerWithError(*configFile, *nodeType, *nodeID)
+	if err != nil {
+		fmt.Printf("failed to create server: %v\n", err)
+		os.Exit(1)
+	}
 	if err := srv.Start(); err != nil {
 		fmt.Printf("failed to start server: %v\n", err)
 		os.Exit(1)

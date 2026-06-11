@@ -32,10 +32,20 @@ type LoginServer struct {
 
 // NewLoginServer 创建登录服务器
 func NewLoginServer(configFile, nodeID string) *LoginServer {
+	loginServer, err := NewLoginServerWithError(configFile, nodeID)
+	if err != nil {
+		logger.Fatal(fmt.Sprintf("Failed to create login server: %v", err))
+	}
+	return loginServer
+}
+
+func NewLoginServerWithError(configFile, nodeID string) (*LoginServer, error) {
 	baseServer, err := NewBaseServerWithOptions(configFile, "login", nodeID, LoginComponents())
 	if err != nil {
-		logger.Fatal(fmt.Sprintf("Failed to create base server: %v", err))
+		return nil, fmt.Errorf("failed to create base server: %v", err)
 	}
+	constructed := false
+	defer cleanupBaseServerUnlessConstructed(baseServer, &constructed)
 
 	loginServer := &LoginServer{
 		BaseServer:  baseServer,
@@ -45,28 +55,26 @@ func NewLoginServer(configFile, nodeID string) *LoginServer {
 	}
 	tokenSecret, err := baseServer.authTokenSecret()
 	if err != nil {
-		logger.Fatal(fmt.Sprintf("Failed to load token secret: %v", err))
+		return nil, fmt.Errorf("failed to load token secret: %v", err)
 	}
 	loginServer.tokenSecret = tokenSecret
 
-	// 注册通用服务
 	if err := RegisterCommonServices(baseServer); err != nil {
-		logger.Fatal(fmt.Sprintf("Failed to register common services: %v", err))
+		return nil, fmt.Errorf("failed to register common services: %v", err)
 	}
 
-	// 注册登录服务
 	loginService := NewLoginService(loginServer)
 	if err := baseServer.rpcServer.RegisterService(loginService); err != nil {
-		logger.Fatal(fmt.Sprintf("Failed to register login service: %v", err))
+		return nil, fmt.Errorf("failed to register login service: %v", err)
 	}
 
-	// 创建登录Actor
 	loginActor := NewLoginActor(loginServer)
 	if err := baseServer.actorSystem.SpawnActor(loginActor); err != nil {
-		logger.Fatal(fmt.Sprintf("Failed to spawn login actor: %v", err))
+		return nil, fmt.Errorf("failed to spawn login actor: %v", err)
 	}
 
-	return loginServer
+	constructed = true
+	return loginServer, nil
 }
 
 // LoginService 登录RPC服务
@@ -104,7 +112,7 @@ func (ls *LoginService) Login(ctx context.Context, req *proto.LoginRequest) (*pr
 	logger.Info(fmt.Sprintf("User login attempt: %s", req.Username))
 
 	// 验证用户名和密码
-	user, err := ls.server.userRepo.GetByUsername(req.Username)
+	user, err := ls.server.userRepo.GetByUsernameContext(ctx, req.Username)
 	if err != nil {
 		logger.Warn(fmt.Sprintf("User not found: %s", req.Username))
 		return nil, fmt.Errorf("invalid username or password")
@@ -119,7 +127,7 @@ func (ls *LoginService) Login(ctx context.Context, req *proto.LoginRequest) (*pr
 	if needsRehash {
 		if passwordHash, hashErr := ls.hashPassword(req.Password); hashErr != nil {
 			logger.Warn(fmt.Sprintf("Failed to upgrade password hash for user %s: %v", req.Username, hashErr))
-		} else if updateErr := ls.server.userRepo.UpdateFields(user.UserID, map[string]interface{}{"password": passwordHash}); updateErr != nil {
+		} else if updateErr := ls.server.userRepo.UpdateFieldsContext(ctx, user.UserID, map[string]interface{}{"password": passwordHash}); updateErr != nil {
 			logger.Warn(fmt.Sprintf("Failed to save upgraded password hash for user %s: %v", req.Username, updateErr))
 		} else {
 			user.Password = passwordHash
@@ -136,7 +144,7 @@ func (ls *LoginService) Login(ctx context.Context, req *proto.LoginRequest) (*pr
 	token := ls.generateToken(user.UserID)
 
 	// 更新用户登录信息
-	err = ls.server.userRepo.UpdateFields(user.UserID, map[string]interface{}{
+	err = ls.server.userRepo.UpdateFieldsContext(ctx, user.UserID, map[string]interface{}{
 		"last_login_at": time.Now(),
 		"last_login_ip": "0.0.0.0", // 实际应该从请求中获取
 	})
@@ -169,7 +177,7 @@ func (ls *LoginService) Register(ctx context.Context, req *proto.LoginRequest) (
 	logger.Info(fmt.Sprintf("User registration attempt: %s", req.Username))
 
 	// 检查用户名是否已存在
-	existingUser, _ := ls.server.userRepo.GetByUsername(req.Username)
+	existingUser, _ := ls.server.userRepo.GetByUsernameContext(ctx, req.Username)
 	if existingUser != nil {
 		return nil, fmt.Errorf("username already exists")
 	}
@@ -199,7 +207,7 @@ func (ls *LoginService) Register(ctx context.Context, req *proto.LoginRequest) (
 	}
 
 	// 保存到数据库
-	if err := ls.server.userRepo.Create(newUser); err != nil {
+	if err := ls.server.userRepo.CreateContext(ctx, newUser); err != nil {
 		logger.Error(fmt.Sprintf("Failed to create user: %v", err))
 		return nil, fmt.Errorf("failed to create user")
 	}

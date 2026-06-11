@@ -25,6 +25,9 @@ coverage.txt
 coverage.html
 *.prof
 
+# Local learning/design notes
+docs/
+
 # 日志文件
 logs/
 *.log
@@ -48,6 +51,7 @@ config/*.secret.yaml
 
 # 缓存目录
 cache/
+.gocache/
 tmp/
 temp/
 .codex_tmp/

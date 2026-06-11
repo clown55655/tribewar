@@ -22,29 +22,37 @@ type LobbyServer struct {
 
 // NewLobbyServer 创建游戏大厅服务器
 func NewLobbyServer(configFile, nodeID string) *LobbyServer {
+	lobbyServer, err := NewLobbyServerWithError(configFile, nodeID)
+	if err != nil {
+		logger.Fatal(fmt.Sprintf("Failed to create lobby server: %v", err))
+	}
+	return lobbyServer
+}
+
+func NewLobbyServerWithError(configFile, nodeID string) (*LobbyServer, error) {
 	baseServer, err := NewBaseServerWithOptions(configFile, "lobby", nodeID, LobbyComponents())
 	if err != nil {
-		logger.Fatal(fmt.Sprintf("Failed to create base server: %v", err))
+		return nil, fmt.Errorf("failed to create base server: %v", err)
 	}
+	constructed := false
+	defer cleanupBaseServerUnlessConstructed(baseServer, &constructed)
 
 	lobbyServer := &LobbyServer{
 		BaseServer: baseServer,
 		roomRepo:   database.NewRoomRepository(baseServer.mongoManager),
-		nextRoomID: 1000, // 房间ID从1000开始
+		nextRoomID: 1000,
 	}
 
-	// 注册通用服务
 	if err := RegisterCommonServices(baseServer); err != nil {
-		logger.Fatal(fmt.Sprintf("Failed to register common services: %v", err))
+		return nil, fmt.Errorf("failed to register common services: %v", err)
 	}
 
-	// 注册大厅服务
 	lobbyService := NewLobbyService(lobbyServer)
 	if err := baseServer.rpcServer.RegisterService(lobbyService); err != nil {
-		logger.Fatal(fmt.Sprintf("Failed to register lobby service: %v", err))
+		return nil, fmt.Errorf("failed to register lobby service: %v", err)
 	}
-
-	return lobbyServer
+	constructed = true
+	return lobbyServer, nil
 }
 
 // generateRoomID 生成房间ID

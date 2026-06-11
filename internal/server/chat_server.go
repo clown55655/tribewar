@@ -23,36 +23,38 @@ type ChatServer struct {
 
 // NewChatServer 创建聊天服务器
 func NewChatServer(configFile, nodeID string) *ChatServer {
+	chatServer, err := NewChatServerWithError(configFile, nodeID)
+	if err != nil {
+		logger.Fatal(fmt.Sprintf("Failed to create chat server: %v", err))
+	}
+	return chatServer
+}
+
+func NewChatServerWithError(configFile, nodeID string) (*ChatServer, error) {
 	baseServer, err := NewBaseServerWithOptions(configFile, "chat", nodeID, ChatComponents())
 	if err != nil {
-		logger.Fatal(fmt.Sprintf("Failed to create base server: %v", err))
+		return nil, fmt.Errorf("failed to create base server: %v", err)
 	}
+	constructed := false
+	defer cleanupBaseServerUnlessConstructed(baseServer, &constructed)
 
 	chatServer := &ChatServer{
 		BaseServer: baseServer,
 	}
 
-	// 初始化数据库仓库
 	chatServer.chatRepo = database.NewChatRepository(baseServer.mongoManager)
 	chatServer.userRepo = database.NewUserRepository(baseServer.mongoManager)
 
-	// TODO: 创建聊天消息处理器
-
-	// 注册通用服务
 	if err := RegisterCommonServices(baseServer); err != nil {
-		logger.Fatal(fmt.Sprintf("Failed to register common services: %v", err))
+		return nil, fmt.Errorf("failed to register common services: %v", err)
 	}
 
-	// 注册聊天服务
 	chatService := NewChatService(chatServer)
 	if err := baseServer.rpcServer.RegisterService(chatService); err != nil {
-		logger.Fatal(fmt.Sprintf("Failed to register chat service: %v", err))
+		return nil, fmt.Errorf("failed to register chat service: %v", err)
 	}
-
-	// 订阅聊天消息 - 简化实现
-	// TODO: 实现消息订阅逻辑
-
-	return chatServer
+	constructed = true
+	return chatServer, nil
 }
 
 // handleChatMessage 处理聊天消息

@@ -24,10 +24,20 @@ type MailServer struct {
 
 // NewMailServer 创建邮件服务器
 func NewMailServer(configFile, nodeID string) *MailServer {
+	mailServer, err := NewMailServerWithError(configFile, nodeID)
+	if err != nil {
+		logger.Fatal(fmt.Sprintf("Failed to create mail server: %v", err))
+	}
+	return mailServer
+}
+
+func NewMailServerWithError(configFile, nodeID string) (*MailServer, error) {
 	baseServer, err := NewBaseServerWithOptions(configFile, "mail", nodeID, MailComponents())
 	if err != nil {
-		logger.Fatal(fmt.Sprintf("Failed to create base server: %v", err))
+		return nil, fmt.Errorf("failed to create base server: %v", err)
 	}
+	constructed := false
+	defer cleanupBaseServerUnlessConstructed(baseServer, &constructed)
 
 	mailServer := &MailServer{
 		BaseServer: baseServer,
@@ -36,18 +46,16 @@ func NewMailServer(configFile, nodeID string) *MailServer {
 		nextMailID: 1,
 	}
 
-	// 注册通用服务
 	if err := RegisterCommonServices(baseServer); err != nil {
-		logger.Fatal(fmt.Sprintf("Failed to register common services: %v", err))
+		return nil, fmt.Errorf("failed to register common services: %v", err)
 	}
 
-	// 注册邮件服务
 	mailService := NewMailService(mailServer)
 	if err := baseServer.rpcServer.RegisterService(mailService); err != nil {
-		logger.Fatal(fmt.Sprintf("Failed to register mail service: %v", err))
+		return nil, fmt.Errorf("failed to register mail service: %v", err)
 	}
-
-	return mailServer
+	constructed = true
+	return mailServer, nil
 }
 
 // generateMailID 生成邮件ID
