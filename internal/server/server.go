@@ -230,35 +230,7 @@ func (bs *BaseServer) Stop() error {
 	bs.status = "stopping"
 	bs.cancel()
 
-	// 停止组件
-	if bs.tcpServer != nil {
-		bs.tcpServer.Stop()
-	}
-
-	if bs.rpcServer != nil {
-		bs.rpcServer.Stop()
-	}
-
-	if bs.actorSystem != nil {
-		bs.actorSystem.Shutdown()
-	}
-
-	if bs.nsqManager != nil {
-		bs.nsqManager.Close()
-	}
-
-	if bs.registry != nil {
-		bs.registry.Unregister(bs.nodeID)
-		bs.registry.Close()
-	}
-
-	if bs.redisManager != nil {
-		bs.redisManager.Close()
-	}
-
-	if bs.mongoManager != nil {
-		bs.mongoManager.Close()
-	}
+	stopErr := bs.stopComponents()
 
 	// 等待所有goroutine结束
 	bs.wg.Wait()
@@ -266,7 +238,7 @@ func (bs *BaseServer) Stop() error {
 	bs.status = "stopped"
 	logger.Info(fmt.Sprintf("Server %s/%s stopped", bs.nodeType, bs.nodeID))
 
-	return nil
+	return stopErr
 }
 
 // GetNodeID 获取节点ID

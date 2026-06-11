@@ -380,6 +380,9 @@ func (r *ETCDRegistry) Watch(nodeType string, callback func([]*ServiceInfo)) err
 			select {
 			case resp := <-watchChan:
 				if resp.Err() != nil {
+					if r.ctx.Err() != nil {
+						return
+					}
 					logger.Error(fmt.Sprintf("Watch error: %v", resp.Err()))
 					continue
 				}
@@ -387,6 +390,9 @@ func (r *ETCDRegistry) Watch(nodeType string, callback func([]*ServiceInfo)) err
 				// 获取最新的服务列表
 				services, err := r.GetServices(nodeType)
 				if err != nil {
+					if r.ctx.Err() != nil {
+						return
+					}
 					logger.Error(fmt.Sprintf("Failed to get services: %v", err))
 					continue
 				}
@@ -411,16 +417,17 @@ func (r *ETCDRegistry) Watch(nodeType string, callback func([]*ServiceInfo)) err
 
 // Close 关闭注册器
 func (r *ETCDRegistry) Close() error {
-	r.cancel()
-
 	// 撤销租约
 	if r.leaseID != 0 {
-		_, err := r.client.Revoke(r.ctx, r.leaseID)
+		ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+		_, err := r.client.Revoke(ctx, r.leaseID)
+		cancel()
 		if err != nil {
 			logger.Error(fmt.Sprintf("Failed to revoke lease: %v", err))
 		}
 	}
 
+	r.cancel()
 	return r.client.Close()
 }
 
