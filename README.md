@@ -404,12 +404,6 @@ security:
 11. `internal/mq/nsq.go`、`internal/discovery/etcd.go`：理解异步消息和服务发现。
 12. `internal/monitoring/monitor.go`、`internal/security/security.go`：理解监控、安全和运维入口。
 
-更详细的学习文档可以继续阅读：
-
-- `docs/从零学习设计.md`
-- `docs/TRIBEWAY_FROM_ZERO_LEARNING_GUIDE.md`
-- `docs/ENTERPRISE_GAME_SERVER_REVIEW.md`
-
 ## 当前限制和后续优化方向
 
 当前版本仍然建议继续完善这些点：
