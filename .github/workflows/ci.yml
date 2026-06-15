@@ -32,9 +32,12 @@ jobs:
         run: go test ./...
 
       - name: Build
-        run: go build -o bin/tribeway ./cmd
+        run: |
+          mkdir -p bin
+          go build -o bin/tribeway ./cmd
 
       - name: Build tools
         run: |
+          mkdir -p bin
           go build -o bin/migrate ./tools/migrate
           go build -o bin/loadtest ./tools/loadtest
