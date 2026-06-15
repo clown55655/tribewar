@@ -248,6 +248,10 @@ func (rm *RedisManager) GetClusterInfo() (map[string]interface{}, error) {
 
 // Set 设置键值对
 func (rm *RedisManager) Set(key string, value interface{}, expiration time.Duration) error {
+	return rm.SetContext(rm.ctx, key, value, expiration)
+}
+
+func (rm *RedisManager) SetContext(ctx context.Context, key string, value interface{}, expiration time.Duration) error {
 	var data []byte
 	var err error
 
@@ -263,7 +267,7 @@ func (rm *RedisManager) Set(key string, value interface{}, expiration time.Durat
 		}
 	}
 
-	return rm.client.Set(rm.ctx, key, data, expiration).Err()
+	return rm.client.Set(ctx, key, data, expiration).Err()
 }
 
 // Get 获取值
@@ -280,7 +284,11 @@ func (rm *RedisManager) Get(key string) ([]byte, error) {
 
 // GetString 获取字符串值
 func (rm *RedisManager) GetString(key string) (string, error) {
-	return rm.client.Get(rm.ctx, key).Result()
+	return rm.GetStringContext(rm.ctx, key)
+}
+
+func (rm *RedisManager) GetStringContext(ctx context.Context, key string) (string, error) {
+	return rm.client.Get(ctx, key).Result()
 }
 
 // GetObject 获取对象
@@ -294,7 +302,11 @@ func (rm *RedisManager) GetObject(key string, dest interface{}) error {
 
 // Delete 删除键
 func (rm *RedisManager) Delete(keys ...string) error {
-	return rm.client.Del(rm.ctx, keys...).Err()
+	return rm.DeleteContext(rm.ctx, keys...)
+}
+
+func (rm *RedisManager) DeleteContext(ctx context.Context, keys ...string) error {
+	return rm.client.Del(ctx, keys...).Err()
 }
 
 // Exists 检查键是否存在
@@ -305,7 +317,11 @@ func (rm *RedisManager) Exists(key string) (bool, error) {
 
 // Expire 设置过期时间
 func (rm *RedisManager) Expire(key string, expiration time.Duration) error {
-	return rm.client.Expire(rm.ctx, key, expiration).Err()
+	return rm.ExpireContext(rm.ctx, key, expiration)
+}
+
+func (rm *RedisManager) ExpireContext(ctx context.Context, key string, expiration time.Duration) error {
+	return rm.client.Expire(ctx, key, expiration).Err()
 }
 
 // TTL 获取TTL
@@ -501,8 +517,12 @@ func NewUserCache(redis *RedisManager) *UserCache {
 
 // SetUserInfo 设置用户信息
 func (uc *UserCache) SetUserInfo(userID uint64, info interface{}) error {
+	return uc.SetUserInfoContext(context.Background(), userID, info)
+}
+
+func (uc *UserCache) SetUserInfoContext(ctx context.Context, userID uint64, info interface{}) error {
 	key := fmt.Sprintf("%s%d", uc.prefix, userID)
-	return uc.redis.Set(key, info, uc.expiry)
+	return uc.redis.SetContext(ctx, key, info, uc.expiry)
 }
 
 // GetUserInfo 获取用户信息
@@ -519,8 +539,12 @@ func (uc *UserCache) DeleteUserInfo(userID uint64) error {
 
 // SetUserOnline 设置用户在线状态
 func (uc *UserCache) SetUserOnline(userID uint64, nodeID string) error {
+	return uc.SetUserOnlineContext(context.Background(), userID, nodeID)
+}
+
+func (uc *UserCache) SetUserOnlineContext(ctx context.Context, userID uint64, nodeID string) error {
 	key := fmt.Sprintf("online:%d", userID)
-	return uc.redis.Set(key, nodeID, 30*time.Minute)
+	return uc.redis.SetContext(ctx, key, nodeID, 30*time.Minute)
 }
 
 // GetUserOnline 获取用户在线节点
@@ -605,14 +629,22 @@ func NewSessionCache(redis *RedisManager) *SessionCache {
 
 // SetSession 设置会话
 func (sc *SessionCache) SetSession(sessionID string, userID uint64) error {
+	return sc.SetSessionContext(context.Background(), sessionID, userID)
+}
+
+func (sc *SessionCache) SetSessionContext(ctx context.Context, sessionID string, userID uint64) error {
 	key := fmt.Sprintf("%s%s", sc.prefix, sessionID)
-	return sc.redis.Set(key, userID, sc.expiry)
+	return sc.redis.SetContext(ctx, key, userID, sc.expiry)
 }
 
 // GetSession 获取会话
 func (sc *SessionCache) GetSession(sessionID string) (uint64, error) {
+	return sc.GetSessionContext(context.Background(), sessionID)
+}
+
+func (sc *SessionCache) GetSessionContext(ctx context.Context, sessionID string) (uint64, error) {
 	key := fmt.Sprintf("%s%s", sc.prefix, sessionID)
-	result, err := sc.redis.GetString(key)
+	result, err := sc.redis.GetStringContext(ctx, key)
 	if err != nil {
 		return 0, err
 	}
@@ -627,12 +659,20 @@ func (sc *SessionCache) GetSession(sessionID string) (uint64, error) {
 
 // DeleteSession 删除会话
 func (sc *SessionCache) DeleteSession(sessionID string) error {
+	return sc.DeleteSessionContext(context.Background(), sessionID)
+}
+
+func (sc *SessionCache) DeleteSessionContext(ctx context.Context, sessionID string) error {
 	key := fmt.Sprintf("%s%s", sc.prefix, sessionID)
-	return sc.redis.Delete(key)
+	return sc.redis.DeleteContext(ctx, key)
 }
 
 // RefreshSession 刷新会话
 func (sc *SessionCache) RefreshSession(sessionID string) error {
+	return sc.RefreshSessionContext(context.Background(), sessionID)
+}
+
+func (sc *SessionCache) RefreshSessionContext(ctx context.Context, sessionID string) error {
 	key := fmt.Sprintf("%s%s", sc.prefix, sessionID)
-	return sc.redis.Expire(key, sc.expiry)
+	return sc.redis.ExpireContext(ctx, key, sc.expiry)
 }
