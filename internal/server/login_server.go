@@ -153,11 +153,16 @@ func (ls *LoginService) Login(ctx context.Context, req *proto.LoginRequest) (*pr
 	}
 
 	// 缓存用户信息
-	ls.server.userCache.SetUserInfo(user.UserID, user)
+	if err := ls.server.userCache.SetUserInfoContext(ctx, user.UserID, user); err != nil {
+		logger.Warn(fmt.Sprintf("Failed to cache user info for %d: %v", user.UserID, err))
+	}
 
 	// 设置用户会话
 	sessionCache := database.NewSessionCache(ls.server.redisManager)
-	sessionCache.SetSession(token, user.UserID)
+	if err := sessionCache.SetSessionContext(ctx, token, user.UserID); err != nil {
+		logger.Error(fmt.Sprintf("Failed to set session for user %d: %v", user.UserID, err))
+		return nil, fmt.Errorf("failed to create session")
+	}
 
 	logger.Info(fmt.Sprintf("User login successful: %s (ID: %d)", req.Username, user.UserID))
 
@@ -216,11 +221,16 @@ func (ls *LoginService) Register(ctx context.Context, req *proto.LoginRequest) (
 	token := ls.generateToken(userID)
 
 	// 缓存用户信息
-	ls.server.userCache.SetUserInfo(userID, newUser)
+	if err := ls.server.userCache.SetUserInfoContext(ctx, userID, newUser); err != nil {
+		logger.Warn(fmt.Sprintf("Failed to cache user info for %d: %v", userID, err))
+	}
 
 	// 设置用户会话
 	sessionCache := database.NewSessionCache(ls.server.redisManager)
-	sessionCache.SetSession(token, userID)
+	if err := sessionCache.SetSessionContext(ctx, token, userID); err != nil {
+		logger.Error(fmt.Sprintf("Failed to set session for user %d: %v", userID, err))
+		return nil, fmt.Errorf("failed to create session")
+	}
 
 	logger.Info(fmt.Sprintf("User registration successful: %s (ID: %d)", req.Username, userID))
 
@@ -251,7 +261,9 @@ func (ls *LoginService) Logout(ctx context.Context, req *proto.BaseRequest) (*pr
 	sessionID := req.Header.SessionId
 	if sessionID != "" {
 		sessionCache := database.NewSessionCache(ls.server.redisManager)
-		sessionCache.DeleteSession(sessionID)
+		if err := sessionCache.DeleteSessionContext(ctx, sessionID); err != nil {
+			logger.Warn(fmt.Sprintf("Failed to delete session for user %d: %v", userID, err))
+		}
 	}
 
 	// 设置用户离线
@@ -288,7 +300,7 @@ func (ls *LoginService) ValidateToken(ctx context.Context, req *proto.BaseReques
 
 	// 验证会话
 	sessionCache := database.NewSessionCache(ls.server.redisManager)
-	userID, err := sessionCache.GetSession(sessionID)
+	userID, err := sessionCache.GetSessionContext(ctx, sessionID)
 	if err != nil {
 		return &proto.BaseResponse{
 			Header: req.Header,
@@ -305,7 +317,9 @@ func (ls *LoginService) ValidateToken(ctx context.Context, req *proto.BaseReques
 	}
 
 	// 刷新会话
-	sessionCache.RefreshSession(sessionID)
+	if err := sessionCache.RefreshSessionContext(ctx, sessionID); err != nil {
+		logger.Warn(fmt.Sprintf("Failed to refresh session for user %d: %v", userID, err))
+	}
 
 	return &proto.BaseResponse{
 		Header: req.Header,
@@ -342,12 +356,17 @@ func (ls *LoginService) RefreshToken(ctx context.Context, req *proto.BaseRequest
 	// 删除旧会话
 	if oldSessionID != "" {
 		sessionCache := database.NewSessionCache(ls.server.redisManager)
-		sessionCache.DeleteSession(oldSessionID)
+		if err := sessionCache.DeleteSessionContext(ctx, oldSessionID); err != nil {
+			logger.Warn(fmt.Sprintf("Failed to delete old session for user %d: %v", userID, err))
+		}
 	}
 
 	// 创建新会话
 	sessionCache := database.NewSessionCache(ls.server.redisManager)
-	sessionCache.SetSession(newToken, userID)
+	if err := sessionCache.SetSessionContext(ctx, newToken, userID); err != nil {
+		logger.Error(fmt.Sprintf("Failed to set refreshed session for user %d: %v", userID, err))
+		return nil, fmt.Errorf("failed to create session")
+	}
 
 	return &proto.BaseResponse{
 		Header: req.Header,
