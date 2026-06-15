@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"reflect"
+	"sync"
 	"time"
 
 	"tribeway/internal/actor"
@@ -100,18 +101,25 @@ func (gs *GatewayServer) Start() error {
 
 // Stop 停止网关服务器
 func (gs *GatewayServer) Stop() error {
-	return gs.BaseServer.Stop()
+	err := gs.BaseServer.Stop()
+	if gs.messageHandler != nil {
+		gs.messageHandler.Close()
+	}
+	return err
 }
 
 // GatewayMessageHandler 网关消息处理器
 type GatewayMessageHandler struct {
-	server *BaseServer
+	server   *BaseServer
+	pools    map[string]*rpc.RPCConnectionPool
+	poolsMux sync.Mutex
 }
 
 // NewGatewayMessageHandler 创建网关消息处理器
 func NewGatewayMessageHandler(server *BaseServer) *GatewayMessageHandler {
 	return &GatewayMessageHandler{
 		server: server,
+		pools:  make(map[string]*rpc.RPCConnectionPool),
 	}
 }
 
@@ -143,10 +151,19 @@ func (gmh *GatewayMessageHandler) routeMessage(conn *network.Connection, msgID u
 	case 1001: // 用户登录
 		return gmh.handleLogin(conn, request)
 	case 1002: // 心跳
+		if err := gmh.validateSession(conn, request); err != nil {
+			return err
+		}
 		return gmh.handleHeartbeat(conn, request)
 	case 1003: // 用户登出
+		if err := gmh.validateSession(conn, request); err != nil {
+			return err
+		}
 		return gmh.handleLogout(conn, request)
 	default:
+		if err := gmh.validateSession(conn, request); err != nil {
+			return err
+		}
 		// 转发到其他服务器
 		return gmh.forwardMessage(conn, msgID, request)
 	}
@@ -166,17 +183,13 @@ func (gmh *GatewayMessageHandler) handleLogin(conn *network.Connection, request 
 
 	logger.Info(fmt.Sprintf("Login request for user: %s", loginReq.Username))
 
-	client := rpc.NewRPCClient(loginService.Address, loginService.Port)
-	client.SetFrameOptions(
-		time.Duration(gmh.server.config.Network.ReadTimeout)*time.Second,
-		time.Duration(gmh.server.config.Network.WriteTimeout)*time.Second,
-		gmh.server.maxPacketSize(),
-	)
-	if err := client.Connect(); err != nil {
-		logger.Warn(fmt.Sprintf("Failed to connect login service %s:%d: %v", loginService.Address, loginService.Port, err))
+	pool := gmh.rpcPool(loginService.Address, loginService.Port)
+	client, err := pool.Get()
+	if err != nil {
+		logger.Warn(fmt.Sprintf("Failed to get login RPC client %s:%d: %v", loginService.Address, loginService.Port, err))
 		return gmh.sendError(conn, request, -2, "login service unavailable")
 	}
-	defer client.Disconnect()
+	defer pool.Put(client)
 
 	responseData, err := client.Call("LoginService", "Login", &loginReq, 5*time.Second)
 	if err != nil {
@@ -198,11 +211,88 @@ func (gmh *GatewayMessageHandler) handleLogin(conn *network.Connection, request 
 	conn.SessionID = loginResp.Token
 
 	userCache := database.NewUserCache(gmh.server.redisManager)
-	if err := userCache.SetUserOnline(loginResp.UserId, gmh.server.nodeID); err != nil {
+	if err := userCache.SetUserOnlineContext(context.Background(), loginResp.UserId, gmh.server.nodeID); err != nil {
 		logger.Warn(fmt.Sprintf("Failed to set user online cache for %d: %v", loginResp.UserId, err))
 	}
 
 	return gmh.sendResponse(conn, request, 0, "login success", &loginResp)
+}
+
+func (gmh *GatewayMessageHandler) rpcPool(address string, port int) *rpc.RPCConnectionPool {
+	key := fmt.Sprintf("%s:%d", address, port)
+
+	gmh.poolsMux.Lock()
+	defer gmh.poolsMux.Unlock()
+
+	if pool := gmh.pools[key]; pool != nil {
+		return pool
+	}
+
+	poolSize := gmh.server.config.RPC.PoolSize
+	if poolSize <= 0 {
+		poolSize = 8
+	}
+	pool := rpc.NewRPCConnectionPool(address, port, poolSize)
+	pool.SetFrameOptions(
+		time.Duration(gmh.server.config.Network.ReadTimeout)*time.Second,
+		time.Duration(gmh.server.config.Network.WriteTimeout)*time.Second,
+		gmh.server.maxPacketSize(),
+	)
+	gmh.pools[key] = pool
+	return pool
+}
+
+func (gmh *GatewayMessageHandler) Close() {
+	gmh.poolsMux.Lock()
+	defer gmh.poolsMux.Unlock()
+
+	for key, pool := range gmh.pools {
+		pool.Close()
+		delete(gmh.pools, key)
+	}
+}
+
+func (gmh *GatewayMessageHandler) validateSession(conn *network.Connection, request *proto.BaseRequest) error {
+	if request == nil || request.Header == nil {
+		return gmh.rejectSession(conn, request, -10000, "invalid request")
+	}
+
+	header := request.Header
+	if conn.UserID == 0 || conn.SessionID == "" {
+		return gmh.rejectSession(conn, request, -10001, "unauthenticated")
+	}
+	if header.GetUserId() == 0 || header.GetSessionId() == "" {
+		return gmh.rejectSession(conn, request, -10001, "missing session")
+	}
+	if header.GetUserId() != conn.UserID || header.GetSessionId() != conn.SessionID {
+		return gmh.rejectSession(conn, request, -10002, "session mismatch")
+	}
+
+	sessionCache := database.NewSessionCache(gmh.server.redisManager)
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+
+	userID, err := sessionCache.GetSessionContext(ctx, header.GetSessionId())
+	if err != nil {
+		logger.Warn(fmt.Sprintf("Session validation failed for user %d: %v", header.GetUserId(), err))
+		return gmh.rejectSession(conn, request, -10003, "invalid session")
+	}
+	if userID != header.GetUserId() {
+		logger.Warn(fmt.Sprintf("Session user mismatch: request=%d redis=%d", header.GetUserId(), userID))
+		return gmh.rejectSession(conn, request, -10002, "session mismatch")
+	}
+	if err := sessionCache.RefreshSessionContext(ctx, header.GetSessionId()); err != nil {
+		logger.Warn(fmt.Sprintf("Failed to refresh session for user %d: %v", header.GetUserId(), err))
+	}
+
+	return nil
+}
+
+func (gmh *GatewayMessageHandler) rejectSession(conn *network.Connection, request *proto.BaseRequest, code int32, msg string) error {
+	if err := gmh.sendError(conn, request, code, msg); err != nil {
+		return err
+	}
+	return fmt.Errorf(msg)
 }
 
 // handleHeartbeat 处理心跳
@@ -219,7 +309,9 @@ func (gmh *GatewayMessageHandler) handleLogout(conn *network.Connection, request
 	if conn.UserID != 0 {
 		// 设置用户离线
 		userCache := database.NewUserCache(gmh.server.redisManager)
-		userCache.SetUserOffline(conn.UserID)
+		if err := userCache.SetUserOffline(conn.UserID); err != nil {
+			logger.Warn(fmt.Sprintf("Failed to set user offline cache for %d: %v", conn.UserID, err))
+		}
 
 		logger.Info(fmt.Sprintf("User %d logged out from connection %d", conn.UserID, conn.ID))
 	}
@@ -262,8 +354,12 @@ func (gmh *GatewayMessageHandler) forwardMessage(conn *network.Connection, msgID
 
 // sendResponse 发送响应
 func (gmh *GatewayMessageHandler) sendResponse(conn *network.Connection, request *proto.BaseRequest, code int32, msg string, data proto.Message) error {
+	var header *proto.MessageHeader
+	if request != nil {
+		header = request.Header
+	}
 	response := &proto.BaseResponse{
-		Header: request.Header,
+		Header: header,
 		Code:   code,
 		Msg:    msg,
 	}
