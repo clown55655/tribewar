@@ -56,10 +56,6 @@ USER tribeway
 # 暴露端口
 EXPOSE 8001 9001 7001
 
-# 健康检查
-HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \
-    CMD ./tribeway -config=config/config.yaml -node=health -id=check || exit 1
-
 # 启动命令
 ENTRYPOINT ["./tribeway"]
 CMD ["-config=config/config.yaml", "-node=gateway", "-id=gateway1"]

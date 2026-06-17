@@ -58,10 +58,16 @@ type NSQManager struct {
 
 // NewNSQManager 创建NSQ管理器
 func NewNSQManager(config *NSQConfig) (*NSQManager, error) {
+	if config == nil {
+		return nil, fmt.Errorf("nsq config is required")
+	}
+	normalizedConfig := *config
+	normalizedConfig.normalize()
+
 	ctx, cancel := context.WithCancel(context.Background())
 
 	manager := &NSQManager{
-		config:    config,
+		config:    &normalizedConfig,
 		consumers: make(map[string]*nsq.Consumer),
 		handlers:  make(map[string]MessageHandler),
 		ctx:       ctx,
@@ -85,6 +91,36 @@ func NewNSQManager(config *NSQConfig) (*NSQManager, error) {
 
 	logger.Infof("NSQ manager initialized in %s mode", manager.mode)
 	return manager, nil
+}
+
+func (config *NSQConfig) normalize() {
+	if config.NSQDAddress == "" {
+		config.NSQDAddress = "127.0.0.1:4150"
+	}
+	if config.NSQLookupDAddress == "" {
+		config.NSQLookupDAddress = "127.0.0.1:4161"
+	}
+	if config.MaxInFlight <= 0 {
+		config.MaxInFlight = 200
+	}
+	if config.DialTimeout <= 0 {
+		config.DialTimeout = time.Second
+	}
+	if config.ReadTimeout < 100*time.Millisecond {
+		config.ReadTimeout = 60 * time.Second
+	}
+	if config.WriteTimeout < 100*time.Millisecond {
+		config.WriteTimeout = time.Second
+	}
+	if config.MessageTimeout <= 0 {
+		config.MessageTimeout = 60 * time.Second
+	}
+	if config.HealthCheckInterval <= 0 {
+		config.HealthCheckInterval = 30 * time.Second
+	}
+	if config.ProducerPoolSize <= 0 {
+		config.ProducerPoolSize = 1
+	}
 }
 
 // initSingleMode 初始化单节点模式
@@ -265,6 +301,9 @@ func (nm *NSQManager) Subscribe(topic, channel string, handler MessageHandler) e
 
 	config := nsq.NewConfig()
 	config.MaxInFlight = nm.config.MaxInFlight
+	config.DialTimeout = nm.config.DialTimeout
+	config.ReadTimeout = nm.config.ReadTimeout
+	config.WriteTimeout = nm.config.WriteTimeout
 	config.MsgTimeout = nm.config.MessageTimeout
 
 	consumer, err := nsq.NewConsumer(topic, channel, config)

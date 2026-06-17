@@ -5,12 +5,12 @@ import (
 	"fmt"
 	"net"
 	"os"
-	"os/signal"
+	"strconv"
 	"strings"
 	"sync"
-	"syscall"
 	"time"
 
+	"github.com/mitchellh/mapstructure"
 	"github.com/spf13/viper"
 
 	"tribeway/internal/actor"
@@ -282,11 +282,73 @@ func loadConfig(configFile string) (*ServerConfig, error) {
 	}
 
 	var config ServerConfig
-	if err := viper.Unmarshal(&config); err != nil {
+	if err := viper.Unmarshal(
+		&config,
+		func(dc *mapstructure.DecoderConfig) {
+			dc.TagName = "yaml"
+		},
+		viper.DecodeHook(mapstructure.StringToTimeDurationHookFunc()),
+	); err != nil {
 		return nil, err
 	}
 
+	applyEnvOverrides(&config)
+
 	return &config, nil
+}
+
+func applyEnvOverrides(config *ServerConfig) {
+	if value := os.Getenv("TRIBEWAY_NETWORK_TCP_PORT"); value != "" {
+		if port, err := strconv.Atoi(value); err == nil {
+			config.Network.TCPPort = port
+		}
+	}
+	if value := os.Getenv("TRIBEWAY_NETWORK_RPC_PORT"); value != "" {
+		if port, err := strconv.Atoi(value); err == nil {
+			config.Network.RPCPort = port
+		}
+	}
+	if value := os.Getenv("TRIBEWAY_NETWORK_HTTP_PORT"); value != "" {
+		if port, err := strconv.Atoi(value); err == nil {
+			config.Network.HTTPPort = port
+		}
+	}
+	if value := os.Getenv("TRIBEWAY_REDIS_ADDR"); value != "" {
+		config.Database.Redis.Addr = value
+	}
+	if value := os.Getenv("TRIBEWAY_MONGODB_URI"); value != "" {
+		config.Database.MongoDB.URI = value
+	}
+	if value := os.Getenv("TRIBEWAY_MONGODB_USERNAME"); value != "" {
+		config.Database.MongoDB.Username = value
+	}
+	if value := os.Getenv("TRIBEWAY_MONGODB_AUTH_SOURCE"); value != "" {
+		config.Database.MongoDB.AuthSource = value
+	}
+	if value := os.Getenv("TRIBEWAY_MONGODB_PASSWORD_ENV"); value != "" {
+		config.Database.MongoDB.PasswordEnv = value
+	}
+	if value := os.Getenv("TRIBEWAY_NSQD_ADDRESS"); value != "" {
+		config.NSQ.NSQDAddress = value
+	}
+	if value := os.Getenv("TRIBEWAY_NSQLOOKUPD_ADDRESS"); value != "" {
+		config.NSQ.NSQLookupDAddress = value
+	}
+	if value := os.Getenv("TRIBEWAY_ETCD_ENDPOINTS"); value != "" {
+		config.ETCD.Endpoints = splitCSV(value)
+	}
+}
+
+func splitCSV(value string) []string {
+	parts := strings.Split(value, ",")
+	values := make([]string, 0, len(parts))
+	for _, part := range parts {
+		part = strings.TrimSpace(part)
+		if part != "" {
+			values = append(values, part)
+		}
+	}
+	return values
 }
 
 // initComponents 初始化组件
@@ -476,10 +538,6 @@ func (bs *BaseServer) Start() error {
 		go bs.loadUpdateLoop()
 	}
 
-	// 监听系统信号
-	bs.wg.Add(1)
-	go bs.signalHandler()
-
 	bs.status = "running"
 	logger.Info(fmt.Sprintf("Server %s/%s started", bs.nodeType, bs.nodeID))
 
@@ -604,23 +662,6 @@ func (bs *BaseServer) calculateLoad() int {
 	}
 
 	return load
-}
-
-// signalHandler 信号处理
-func (bs *BaseServer) signalHandler() {
-	defer bs.wg.Done()
-
-	sigChan := make(chan os.Signal, 1)
-	signal.Notify(sigChan, syscall.SIGINT, syscall.SIGTERM)
-
-	select {
-	case sig := <-sigChan:
-		logger.Info(fmt.Sprintf("Received signal %v, shutting down...", sig))
-		bs.Stop()
-
-	case <-bs.ctx.Done():
-		return
-	}
 }
 
 // GetActorSystem 获取Actor系统
