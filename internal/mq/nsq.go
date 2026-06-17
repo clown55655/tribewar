@@ -12,6 +12,20 @@ import (
 	"tribeway/internal/logger"
 )
 
+const (
+	defaultNSQDAddress        = "127.0.0.1:4150"
+	defaultNSQLookupDAddress  = "127.0.0.1:4161"
+	defaultNSQMaxInFlight     = 200
+	defaultNSQDialTimeout     = time.Second
+	defaultNSQReadTimeout     = 60 * time.Second
+	defaultNSQWriteTimeout    = time.Second
+	defaultNSQMessageTimeout  = 60 * time.Second
+	defaultNSQHealthCheck     = 30 * time.Second
+	defaultNSQProducerPool    = 1
+	minNSQNetworkReadTimeout  = 100 * time.Millisecond
+	minNSQNetworkWriteTimeout = 100 * time.Millisecond
+)
+
 // NSQConfig NSQ配置
 type NSQConfig struct {
 	// 单节点模式
@@ -95,42 +109,37 @@ func NewNSQManager(config *NSQConfig) (*NSQManager, error) {
 
 func (config *NSQConfig) normalize() {
 	if config.NSQDAddress == "" {
-		config.NSQDAddress = "127.0.0.1:4150"
+		config.NSQDAddress = defaultNSQDAddress
 	}
 	if config.NSQLookupDAddress == "" {
-		config.NSQLookupDAddress = "127.0.0.1:4161"
+		config.NSQLookupDAddress = defaultNSQLookupDAddress
 	}
 	if config.MaxInFlight <= 0 {
-		config.MaxInFlight = 200
+		config.MaxInFlight = defaultNSQMaxInFlight
 	}
 	if config.DialTimeout <= 0 {
-		config.DialTimeout = time.Second
+		config.DialTimeout = defaultNSQDialTimeout
 	}
-	if config.ReadTimeout < 100*time.Millisecond {
-		config.ReadTimeout = 60 * time.Second
+	if config.ReadTimeout < minNSQNetworkReadTimeout {
+		config.ReadTimeout = defaultNSQReadTimeout
 	}
-	if config.WriteTimeout < 100*time.Millisecond {
-		config.WriteTimeout = time.Second
+	if config.WriteTimeout < minNSQNetworkWriteTimeout {
+		config.WriteTimeout = defaultNSQWriteTimeout
 	}
 	if config.MessageTimeout <= 0 {
-		config.MessageTimeout = 60 * time.Second
+		config.MessageTimeout = defaultNSQMessageTimeout
 	}
 	if config.HealthCheckInterval <= 0 {
-		config.HealthCheckInterval = 30 * time.Second
+		config.HealthCheckInterval = defaultNSQHealthCheck
 	}
 	if config.ProducerPoolSize <= 0 {
-		config.ProducerPoolSize = 1
+		config.ProducerPoolSize = defaultNSQProducerPool
 	}
 }
 
 // initSingleMode 初始化单节点模式
 func (nm *NSQManager) initSingleMode() error {
-	producerConfig := nsq.NewConfig()
-	producerConfig.DialTimeout = nm.config.DialTimeout
-	producerConfig.ReadTimeout = nm.config.ReadTimeout
-	producerConfig.WriteTimeout = nm.config.WriteTimeout
-
-	producer, err := nsq.NewProducer(nm.config.NSQDAddress, producerConfig)
+	producer, err := nsq.NewProducer(nm.config.NSQDAddress, nm.newProducerConfig())
 	if err != nil {
 		return fmt.Errorf("failed to create NSQ producer: %v", err)
 	}
@@ -154,14 +163,9 @@ func (nm *NSQManager) initClusterMode() error {
 		return fmt.Errorf("NSQD addresses not configured for cluster mode")
 	}
 
-	producerConfig := nsq.NewConfig()
-	producerConfig.DialTimeout = nm.config.DialTimeout
-	producerConfig.ReadTimeout = nm.config.ReadTimeout
-	producerConfig.WriteTimeout = nm.config.WriteTimeout
-
 	// 为每个NSQD节点创建生产者
 	for _, addr := range nm.config.NSQDAddresses {
-		producer, err := nsq.NewProducer(addr, producerConfig)
+		producer, err := nsq.NewProducer(addr, nm.newProducerConfig())
 		if err != nil {
 			// 清理已创建的生产者
 			nm.closeProducers()
@@ -193,6 +197,21 @@ func (nm *NSQManager) initClusterMode() error {
 
 	logger.Infof("NSQ cluster mode initialized: %d producers", len(nm.producers))
 	return nil
+}
+
+func (nm *NSQManager) newProducerConfig() *nsq.Config {
+	config := nsq.NewConfig()
+	config.DialTimeout = nm.config.DialTimeout
+	config.ReadTimeout = nm.config.ReadTimeout
+	config.WriteTimeout = nm.config.WriteTimeout
+	return config
+}
+
+func (nm *NSQManager) newConsumerConfig() *nsq.Config {
+	config := nm.newProducerConfig()
+	config.MaxInFlight = nm.config.MaxInFlight
+	config.MsgTimeout = nm.config.MessageTimeout
+	return config
 }
 
 // closeProducers 关闭所有生产者
@@ -299,14 +318,7 @@ func (nm *NSQManager) Subscribe(topic, channel string, handler MessageHandler) e
 		return fmt.Errorf("already subscribed to %s/%s", topic, channel)
 	}
 
-	config := nsq.NewConfig()
-	config.MaxInFlight = nm.config.MaxInFlight
-	config.DialTimeout = nm.config.DialTimeout
-	config.ReadTimeout = nm.config.ReadTimeout
-	config.WriteTimeout = nm.config.WriteTimeout
-	config.MsgTimeout = nm.config.MessageTimeout
-
-	consumer, err := nsq.NewConsumer(topic, channel, config)
+	consumer, err := nsq.NewConsumer(topic, channel, nm.newConsumerConfig())
 	if err != nil {
 		return fmt.Errorf("failed to create consumer: %v", err)
 	}
