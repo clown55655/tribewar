@@ -1,6 +1,11 @@
 # 多阶段构建 Dockerfile
 FROM golang:1.21-alpine AS builder
 
+ARG GOPROXY=https://goproxy.cn,direct
+ARG GOSUMDB=sum.golang.google.cn
+ENV GOPROXY=${GOPROXY}
+ENV GOSUMDB=${GOSUMDB}
+
 # 安装必要工具
 RUN apk add --no-cache git ca-certificates
 
